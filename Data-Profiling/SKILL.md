@@ -4,7 +4,7 @@ description: >
   输入一个行业名称和探查深度，自动生成该行业的业务场景模拟网页。
   包含业务线清单、业务流程、表结构 DDL、模拟数据、ER 关系图。
   当用户提到"业务场景"、"行业模拟"、"生成表结构"、"模拟数据"、
-  "生成网页"、"数据建模"或输入行业名称时触发。
+  "生成业务场景网页"或输入行业名称时触发。
 ---
 
 # 业务场景模拟
@@ -16,11 +16,18 @@ description: >
 
 ## 深度参数
 
-| 探查次数 | 业务线数 | 每业务表数 | 流程描述 | 模拟数据量 |
+| 探查深度 | 业务线数 | 每业务表数 | 流程描述 | 模拟数据量 |
 |---------|---------|-----------|---------|-----------|
 | 1 | 2-3 | 3-5 | 纯文字描述 | 每表 5-10 条 |
-| 2 | 4-5 | 5-10 | 文字 + Mermaid 流程图 | 每表 10-20 条 |
+| 2（默认） | 4-5 | 5-10 | 文字 + Mermaid 流程图 | 每表 10-20 条 |
 | ≥3 | 5-8 | 10-20 | 完整流程图 + 异常分支 | 每表 20-50 条 |
+
+**默认行为：** 用户未指定深度时，默认使用深度=2（中等）。
+
+**输入校验：**
+- 行业名称为空 → 提示用户输入
+- 深度=0、负数、非数字 → 按深度=1 处理
+- 模板文件不存在 → 提示用户并终止
 
 ## 核心工作流
 
@@ -28,40 +35,42 @@ description: >
 
 读取 `templates/index.html` 文件内容，作为输出 HTML 的骨架。
 
+如果模板文件不存在，提示用户并终止执行。
+
 ### Step 2：生成业务数据 JSON
 
 根据用户输入的行业和深度，生成符合以下结构的 JSON 数据：
 
 ```json
 {
-  "industry": "行业名称",
-  "depth": 数字,
-  "generateTime": "YYYY-MM-DD HH:mm:ss",
+  "industry": "string - 行业名称",
+  "depth": "number - 探查深度(1/2/≥3)",
+  "generateTime": "string - YYYY-MM-DD HH:mm:ss",
   "businessLines": [
     {
-      "name": "业务线名称",
-      "description": "业务线描述",
+      "name": "string - 业务线名称",
+      "description": "string - 业务线描述",
       "processes": [
         {
-          "name": "流程名称",
-          "description": "流程描述",
-          "flowchart": "graph LR\nA[步骤1] --> B[步骤2]",
-          "tables": ["表名1", "表名2"]
+          "name": "string - 流程名称",
+          "description": "string - 流程描述",
+          "flowchart": "string - Mermaid graph 语法(深度≥2时生成)",
+          "tables": ["string - 表名"]
         }
       ],
       "tables": [
         {
-          "name": "表名",
-          "comment": "表注释",
+          "name": "string - 表名",
+          "comment": "string - 表注释",
           "columns": [
-            { "name": "字段名", "type": "类型", "comment": "注释", "isPk": true/false }
+            { "name": "string", "type": "string", "comment": "string", "isPk": "boolean" }
           ],
-          "ddl": "CREATE TABLE ...;",
-          "data": [{ "字段名": "值" }]
+          "ddl": "string - 完整 CREATE TABLE 语句",
+          "data": ["object - 每行是一个键值对，key 为字段名"]
         }
       ],
       "relations": [
-        { "from": "表A", "to": "表B", "type": "1:N 或 1:1", "field": "关联字段" }
+        { "from": "string - 源表名", "to": "string - 目标表名", "type": "string - 1:N 或 1:1", "field": "string - 关联字段名" }
       ]
     }
   ]
@@ -110,7 +119,7 @@ Data-Profiling/biz-scenario-{行业}-{时间戳}.html
 
 当用户要求调整深度时（如"把深度改为3"、"再深入一点"、"简化一些"）：
 
-1. **读取已有 HTML 文件**，提取其中的 `BIZ_DATA` JSON 数据
+1. **读取已有 HTML 文件**，找到 `const BIZ_DATA = ` 行，提取 `=` 之后到 `;` 之前的 JSON 内容
 2. **判断方向：**
    - **深化**（深度增加）：保留已有表，新增表到目标数量；已有表追加模拟数据；流程描述加深
    - **简化**（深度减少）：保留核心表，移除扩展表；模拟数据缩减到目标数量

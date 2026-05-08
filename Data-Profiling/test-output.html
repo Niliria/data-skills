@@ -64,6 +64,21 @@ body {
     flex-shrink: 0;
 }
 
+.sidebar-actions { padding: 8px; border-bottom: 1px solid #ffffff1a; }
+
+.sidebar-action-btn {
+    width: 100%;
+    padding: 6px 12px;
+    background: transparent;
+    color: #ffffffbf;
+    border: 1px solid #ffffff33;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.sidebar-action-btn:hover { background: #ffffff0d; color: #fff; }
+
 .biz-line { border-bottom: 1px solid #ffffff1a; }
 
 .biz-line-header {
@@ -232,6 +247,9 @@ body {
         </header>
         <div class="main-container">
             <aside class="sidebar">
+                <div class="sidebar-actions">
+                    <button class="sidebar-action-btn" id="toggle-all-btn" onclick="toggleAll()">全部展开</button>
+                </div>
                 <nav id="biz-nav"></nav>
             </aside>
             <main class="content">
@@ -262,15 +280,14 @@ body {
 (function() {
     'use strict';
 
-    let currentBizLine = 0;
-    let currentProcess = 0;
-
     function init() {
         renderHeader();
         renderSidebar();
         renderTabs();
         selectBizLine(0, 0);
-        mermaid.initialize({ startOnLoad: false, theme: 'default' });
+        if (typeof mermaid !== 'undefined') {
+            mermaid.initialize({ startOnLoad: false, theme: 'default' });
+        }
     }
 
     function renderHeader() {
@@ -302,6 +319,18 @@ body {
         const header = list.previousElementSibling;
         list.classList.toggle('show');
         header.classList.toggle('expanded');
+    }
+
+    let allExpanded = false;
+    function toggleAll() {
+        allExpanded = !allExpanded;
+        document.querySelectorAll('.process-list').forEach(list => {
+            list.classList.toggle('show', allExpanded);
+        });
+        document.querySelectorAll('.biz-line-header').forEach(header => {
+            header.classList.toggle('expanded', allExpanded);
+        });
+        document.getElementById('toggle-all-btn').textContent = allExpanded ? '全部收起' : '全部展开';
     }
 
     function selectBizLine(bizIndex, procIndex) {
@@ -345,7 +374,9 @@ body {
         proc.tables.forEach(t => { html += '<li>' + t + '</li>'; });
         html += '</ul></div>';
         container.innerHTML = html;
-        mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+        if (typeof mermaid !== 'undefined') {
+            mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+        }
     }
 
     function renderSchemaTab(line, proc) {
@@ -366,7 +397,9 @@ body {
             html += '</div>';
         });
         container.innerHTML = html;
-        container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+        if (typeof hljs !== 'undefined') {
+            container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+        }
     }
 
     function renderDataTab(line, proc) {
@@ -385,12 +418,14 @@ body {
                     html += '</tr>';
                 });
                 html += '</tbody></table></div>';
-                html += '<div style="margin-top:12px"><div class="code-block"><button class="copySQL(this)">复制</button><pre><code class="language-sql">' + generateInserts(table) + '</code></pre></div></div>';
+                html += '<div style="margin-top:12px"><div class="code-block"><button class="copy-btn" onclick="copySQL(this)">复制</button><pre><code class="language-sql">' + generateInserts(table) + '</code></pre></div></div>';
             }
             html += '</div>';
         });
         container.innerHTML = html;
-        container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+        if (typeof hljs !== 'undefined') {
+            container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+        }
     }
 
     function renderERTab() {
@@ -399,13 +434,15 @@ body {
         BIZ_DATA.businessLines.forEach(line => {
             if (line.relations) {
                 line.relations.forEach(rel => {
-                    const connector = rel.type === '1:1' ? '||--||' : '||--o{';
+                    const connector = rel.type === '1:1' ? '||--||' : rel.type === 'N:N' ? '}o--o{' : '||--o{';
                     erDiagram += '    ' + rel.from + ' ' + connector + ' ' + rel.to + ' : "' + rel.field + '"\n';
                 });
             }
         });
         container.innerHTML = '<div class="card"><h3>ER 关系图</h3><div class="mermaid">' + erDiagram + '</div></div>';
-        mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+        if (typeof mermaid !== 'undefined') {
+            mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+        }
         updateStats();
     }
 
@@ -450,12 +487,15 @@ body {
     };
 
     document.getElementById('export-btn').addEventListener('click', function() {
+        const dataJson = JSON.stringify(BIZ_DATA, null, 2);
+        const now = new Date();
+        const ts = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
         const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'biz-scenario-' + BIZ_DATA.industry + '-' + BIZ_DATA.depth + '.html';
+        a.download = 'biz-scenario-' + BIZ_DATA.industry + '-' + ts + '.html';
         a.click();
         URL.revokeObjectURL(url);
     });

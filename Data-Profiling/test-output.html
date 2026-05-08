@@ -31,9 +31,35 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
 }
 
 .header h1 { font-size: 18px; font-weight: 600; }
+
+.header-controls { display: flex; gap: 12px; align-items: center; }
+
+.header-controls label { font-size: 13px; color: #595959; display: flex; align-items: center; gap: 6px; }
+
+.header-controls input[type="text"] {
+    padding: 6px 10px;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    font-size: 13px;
+    width: 140px;
+}
+
+.header-controls input[type="text"]:focus { border-color: #1890ff; outline: none; box-shadow: 0 0 0 2px rgba(24,144,255,0.1); }
+
+.header-controls select {
+    padding: 6px 10px;
+    border: 1px solid #d9d9d9;
+    border-radius: 4px;
+    font-size: 13px;
+    background: #fff;
+}
+
+.header-controls select:focus { border-color: #1890ff; outline: none; }
 
 .header-info { display: flex; gap: 16px; align-items: center; font-size: 13px; color: #8c8c8c; }
 
@@ -49,6 +75,7 @@ body {
 
 .btn:hover { background: #40a9ff; }
 .btn:focus-visible { outline: 2px solid #1890ff; outline-offset: 2px; }
+.btn:disabled { background: #d9d9d9; cursor: not-allowed; }
 
 .main-container {
     display: flex;
@@ -91,7 +118,6 @@ body {
 }
 
 .biz-line-header:hover { background: #ffffff0d; }
-.biz-line-header:focus-visible { outline: 2px solid #1890ff; outline-offset: -2px; }
 
 .biz-line-header .arrow { transition: transform 0.2s; font-size: 12px; }
 .biz-line-header.expanded .arrow { transform: rotate(90deg); }
@@ -108,7 +134,6 @@ body {
 
 .process-item:hover { background: #ffffff0d; color: #fff; }
 .process-item.active { background: #1890ff; color: #fff; }
-.process-item:focus-visible { outline: 2px solid #1890ff; outline-offset: -2px; }
 
 .content {
     flex: 1;
@@ -137,7 +162,6 @@ body {
 
 .tab-btn:hover { color: #1890ff; }
 .tab-btn.active { color: #1890ff; border-bottom-color: #1890ff; }
-.tab-btn:focus-visible { outline: 2px solid #1890ff; outline-offset: -2px; }
 
 .tab-content { flex: 1; overflow-y: auto; padding: 16px; }
 .tab-pane { display: none; }
@@ -238,17 +262,21 @@ body {
     <div id="app">
         <header class="header">
             <h1>📊 业务场景模拟器</h1>
-            <div class="header-info">
+            <div class="header-controls">
+                <label>行业：<input type="text" id="industry-input" placeholder="如：电商、金融、医疗" value=""></label>
+                <label>深度：<select id="depth-select"><option value="1">1 - 轻量级</option><option value="2" selected>2 - 中等</option><option value="3">3 - 深度建模</option></select></label>
+                <button id="generate-btn" class="btn">▶ 生成</button>
+            </div>
+            <div class="header-info" id="header-info" style="display:none;">
                 <span id="industry-display"></span>
                 <span id="depth-display"></span>
                 <span id="time-display"></span>
-                <button id="export-btn" class="btn">导出 HTML</button>
             </div>
         </header>
         <div class="main-container">
             <aside class="sidebar">
                 <div class="sidebar-actions">
-                    <button class="sidebar-action-btn" id="toggle-all-btn" onclick="toggleAll()">全部展开</button>
+                    <button class="sidebar-action-btn" id="toggle-all-btn">全部展开</button>
                 </div>
                 <nav id="biz-nav"></nav>
             </aside>
@@ -273,197 +301,265 @@ body {
     </div>
 
     <script>
-        // 业务数据注入点 - Skill 执行时替换
-        const BIZ_DATA = {"industry":"电商","depth":2,"generateTime":"2026-05-08 14:30:00","businessLines":[{"name":"商品管理","description":"商品的全生命周期管理","processes":[{"name":"商品录入","description":"商家提交商品信息，平台审核后上架","flowchart":"graph LR\nA[商家提交] --> B{平台审核}\nB -->|通过| C[上架]\nB -->|驳回| D[修改]","tables":["dim_product","dwd_product_audit"]}],"tables":[{"name":"dim_product","comment":"商品维度表","columns":[{"name":"product_id","type":"BIGINT","comment":"商品ID","isPk":true},{"name":"product_name","type":"VARCHAR(256)","comment":"商品名称"},{"name":"category_id","type":"BIGINT","comment":"类目ID"},{"name":"price","type":"DECIMAL(10,2)","comment":"售价"},{"name":"status","type":"TINYINT","comment":"状态 0下架 1上架"}],"ddl":"CREATE TABLE dim_product (\n  product_id BIGINT COMMENT '商品ID',\n  product_name VARCHAR(256) COMMENT '商品名称',\n  category_id BIGINT COMMENT '类目ID',\n  price DECIMAL(10,2) COMMENT '售价',\n  status TINYINT COMMENT '状态 0下架 1上架'\n) COMMENT '商品维度表';","data":[{"product_id":1001,"product_name":"iPhone 15","category_id":101,"price":5999.00,"status":1},{"product_id":1002,"product_name":"MacBook Pro","category_id":102,"price":12999.00,"status":1},{"product_id":1003,"product_name":"AirPods Pro","category_id":103,"price":1999.00,"status":0}]},{"name":"dwd_product_audit","comment":"商品审核事实表","columns":[{"name":"audit_id","type":"BIGINT","comment":"审核ID","isPk":true},{"name":"product_id","type":"BIGINT","comment":"商品ID"},{"name":"auditor","type":"VARCHAR(64)","comment":"审核人"},{"name":"audit_time","type":"DATETIME","comment":"审核时间"},{"name":"result","type":"TINYINT","comment":"结果 0驳回 1通过"}],"ddl":"CREATE TABLE dwd_product_audit (\n  audit_id BIGINT COMMENT '审核ID',\n  product_id BIGINT COMMENT '商品ID',\n  auditor VARCHAR(64) COMMENT '审核人',\n  audit_time DATETIME COMMENT '审核时间',\n  result TINYINT COMMENT '结果 0驳回 1通过'\n) COMMENT '商品审核事实表';","data":[{"audit_id":1,"product_id":1001,"auditor":"张三","audit_time":"2026-05-01 10:00:00","result":1},{"audit_id":2,"product_id":1002,"auditor":"李四","audit_time":"2026-05-01 11:00:00","result":1},{"audit_id":3,"product_id":1003,"auditor":"张三","audit_time":"2026-05-02 09:00:00","result":0}]}],"relations":[{"from":"dim_product","to":"dwd_product_audit","type":"1:N","field":"product_id"}]},{"name":"订单交易","description":"订单的全流程管理","processes":[{"name":"下单","description":"用户选择商品提交订单","flowchart":"graph LR\nA[购物车] --> B[确认订单]\nB --> C[提交订单]\nC --> D[待支付]","tables":["dwd_order","dwd_order_item"]}],"tables":[{"name":"dwd_order","comment":"订单事实表","columns":[{"name":"order_id","type":"BIGINT","comment":"订单ID","isPk":true},{"name":"user_id","type":"BIGINT","comment":"用户ID"},{"name":"total_amount","type":"DECIMAL(10,2)","comment":"订单总额"},{"name":"status","type":"TINYINT","comment":"状态 0待支付 1已支付 2已取消"},{"name":"create_time","type":"DATETIME","comment":"创建时间"}],"ddl":"CREATE TABLE dwd_order (\n  order_id BIGINT COMMENT '订单ID',\n  user_id BIGINT COMMENT '用户ID',\n  total_amount DECIMAL(10,2) COMMENT '订单总额',\n  status TINYINT COMMENT '状态',\n  create_time DATETIME COMMENT '创建时间'\n) COMMENT '订单事实表';","data":[{"order_id":5001,"user_id":100,"total_amount":5999.00,"status":1,"create_time":"2026-05-01 12:00:00"},{"order_id":5002,"user_id":101,"total_amount":14998.00,"status":1,"create_time":"2026-05-02 15:00:00"}]},{"name":"dwd_order_item","comment":"订单明细表","columns":[{"name":"item_id","type":"BIGINT","comment":"明细ID","isPk":true},{"name":"order_id","type":"BIGINT","comment":"订单ID"},{"name":"product_id","type":"BIGINT","comment":"商品ID"},{"name":"quantity","type":"INT","comment":"数量"},{"name":"price","type":"DECIMAL(10,2)","comment":"单价"}],"ddl":"CREATE TABLE dwd_order_item (\n  item_id BIGINT COMMENT '明细ID',\n  order_id BIGINT COMMENT '订单ID',\n  product_id BIGINT COMMENT '商品ID',\n  quantity INT COMMENT '数量',\n  price DECIMAL(10,2) COMMENT '单价'\n) COMMENT '订单明细表';","data":[{"item_id":1,"order_id":5001,"product_id":1001,"quantity":1,"price":5999.00},{"item_id":2,"order_id":5002,"product_id":1002,"quantity":1,"price":12999.00},{"item_id":3,"order_id":5002,"product_id":1003,"quantity":1,"price":1999.00}]}],"relations":[{"from":"dwd_order","to":"dwd_order_item","type":"1:N","field":"order_id"}]}]};
+        let BIZ_DATA = null;
     </script>
     <script>
 (function() {
     'use strict';
 
-    function init() {
+    var currentBizLine = 0;
+    var currentProcess = 0;
+    var allExpanded = false;
+
+    var DEMO_DATA = {"industry":"电商","depth":2,"generateTime":"2026-05-08 15:00:00","businessLines":[{"name":"商品管理","description":"商品全生命周期管理，涵盖录入、审核、上下架、库存维护等核心环节","processes":[{"name":"商品录入与审核","description":"商家提交商品信息，平台进行资质与内容审核，通过后自动上架","flowchart":"graph LR\nA[商家提交] --> B{平台审核}\nB -->|通过| C[自动上架]\nB -->|驳回| D[修改重提]","tables":["dim_product","dwd_product_audit"]},{"name":"库存管理","description":"实时同步仓库库存，支持安全库存预警与盘点差异处理","flowchart":"graph LR\nA[入库/出库] --> B[更新库存]\nB --> C{低于阈值?}\nC -->|是| D[触发预警]\nC -->|否| E[正常]","tables":["dwd_inventory_log","dwd_stock_alert"]}],"tables":[{"name":"dim_product","comment":"商品维度表","columns":[{"name":"product_id","type":"BIGINT","comment":"商品ID","isPk":true},{"name":"product_name","type":"VARCHAR(256)","comment":"商品名称"},{"name":"category_id","type":"BIGINT","comment":"类目ID"},{"name":"brand_id","type":"BIGINT","comment":"品牌ID"},{"name":"price","type":"DECIMAL(10,2)","comment":"售价"},{"name":"status","type":"TINYINT","comment":"状态 0下架 1上架 2审核中"}],"ddl":"CREATE TABLE dim_product (\n  product_id BIGINT COMMENT '商品ID',\n  product_name VARCHAR(256) COMMENT '商品名称',\n  category_id BIGINT COMMENT '类目ID',\n  brand_id BIGINT COMMENT '品牌ID',\n  price DECIMAL(10,2) COMMENT '售价',\n  status TINYINT COMMENT '状态 0下架 1上架 2审核中'\n) COMMENT '商品维度表';","data":[{"product_id":1001,"product_name":"iPhone 15 Pro","category_id":101,"brand_id":201,"price":7999.00,"status":1},{"product_id":1002,"product_name":"MacBook Air M3","category_id":102,"brand_id":201,"price":8999.00,"status":1},{"product_id":1003,"product_name":"AirPods Pro 2","category_id":103,"brand_id":201,"price":1899.00,"status":0},{"product_id":1004,"product_name":"小米14 Ultra","category_id":101,"brand_id":202,"price":5999.00,"status":1},{"product_id":1005,"product_name":"Redmi K70","category_id":101,"brand_id":202,"price":2499.00,"status":2}]},{"name":"dwd_product_audit","comment":"商品审核事实表","columns":[{"name":"audit_id","type":"BIGINT","comment":"审核ID","isPk":true},{"name":"product_id","type":"BIGINT","comment":"商品ID"},{"name":"auditor_id","type":"BIGINT","comment":"审核人ID"},{"name":"audit_time","type":"DATETIME","comment":"审核时间"},{"name":"result","type":"TINYINT","comment":"结果 0驳回 1通过"},{"name":"remark","type":"VARCHAR(512)","comment":"审核意见"}],"ddl":"CREATE TABLE dwd_product_audit (\n  audit_id BIGINT COMMENT '审核ID',\n  product_id BIGINT COMMENT '商品ID',\n  auditor_id BIGINT COMMENT '审核人ID',\n  audit_time DATETIME COMMENT '审核时间',\n  result TINYINT COMMENT '结果 0驳回 1通过',\n  remark VARCHAR(512) COMMENT '审核意见'\n) COMMENT '商品审核事实表';","data":[{"audit_id":1,"product_id":1001,"auditor_id":301,"audit_time":"2026-05-01 10:00:00","result":1,"remark":"信息完整，予以通过"},{"audit_id":2,"product_id":1002,"auditor_id":302,"audit_time":"2026-05-01 11:30:00","result":1,"remark":"符合规范"},{"audit_id":3,"product_id":1003,"auditor_id":301,"audit_time":"2026-05-02 09:15:00","result":0,"remark":"主图不清晰，需重新上传"},{"audit_id":4,"product_id":1004,"auditor_id":303,"audit_time":"2026-05-02 14:00:00","result":1,"remark":"通过"},{"audit_id":5,"product_id":1005,"auditor_id":302,"audit_time":"2026-05-03 10:00:00","result":1,"remark":"通过"}]},{"name":"dwd_inventory_log","comment":"库存流水表","columns":[{"name":"log_id","type":"BIGINT","comment":"流水ID","isPk":true},{"name":"product_id","type":"BIGINT","comment":"商品ID"},{"name":"change_type","type":"TINYINT","comment":"变动类型 1入库 2出库 3盘点"},{"name":"change_qty","type":"INT","comment":"变动数量"},{"name":"balance_qty","type":"INT","comment":"变动后结余"},{"name":"operate_time","type":"DATETIME","comment":"操作时间"}],"ddl":"CREATE TABLE dwd_inventory_log (\n  log_id BIGINT COMMENT '流水ID',\n  product_id BIGINT COMMENT '商品ID',\n  change_type TINYINT COMMENT '变动类型 1入库 2出库 3盘点',\n  change_qty INT COMMENT '变动数量',\n  balance_qty INT COMMENT '变动后结余',\n  operate_time DATETIME COMMENT '操作时间'\n) COMMENT '库存流水表';","data":[{"log_id":1,"product_id":1001,"change_type":1,"change_qty":500,"balance_qty":500,"operate_time":"2026-05-01 08:00:00"},{"log_id":2,"product_id":1001,"change_type":2,"change_qty":120,"balance_qty":380,"operate_time":"2026-05-01 18:00:00"},{"log_id":3,"product_id":1002,"change_type":1,"change_qty":200,"balance_qty":200,"operate_time":"2026-05-01 08:00:00"},{"log_id":4,"product_id":1002,"change_type":2,"change_qty":45,"balance_qty":155,"operate_time":"2026-05-02 12:00:00"},{"log_id":5,"product_id":1003,"change_type":1,"change_qty":1000,"balance_qty":1000,"operate_time":"2026-05-01 08:00:00"}]},{"name":"dwd_stock_alert","comment":"库存预警表","columns":[{"name":"alert_id","type":"BIGINT","comment":"预警ID","isPk":true},{"name":"product_id","type":"BIGINT","comment":"商品ID"},{"name":"current_stock","type":"INT","comment":"当前库存"},{"name":"threshold","type":"INT","comment":"预警阈值"},{"name":"alert_time","type":"DATETIME","comment":"预警时间"},{"name":"status","type":"TINYINT","comment":"处理状态 0待处理 1已处理"}],"ddl":"CREATE TABLE dwd_stock_alert (\n  alert_id BIGINT COMMENT '预警ID',\n  product_id BIGINT COMMENT '商品ID',\n  current_stock INT COMMENT '当前库存',\n  threshold INT COMMENT '预警阈值',\n  alert_time DATETIME COMMENT '预警时间',\n  status TINYINT COMMENT '处理状态 0待处理 1已处理'\n) COMMENT '库存预警表';","data":[{"alert_id":1,"product_id":1002,"current_stock":155,"threshold":200,"alert_time":"2026-05-02 12:05:00","status":0},{"alert_id":2,"product_id":1004,"current_stock":80,"threshold":100,"alert_time":"2026-05-03 09:00:00","status":1}]}],"relations":[{"from":"dim_product","to":"dwd_product_audit","type":"1:N","field":"product_id"},{"from":"dim_product","to":"dwd_inventory_log","type":"1:N","field":"product_id"},{"from":"dim_product","to":"dwd_stock_alert","type":"1:N","field":"product_id"}]},{"name":"订单交易","description":"覆盖用户下单、支付、退款、结算等交易全链路","processes":[{"name":"下单与支付","description":"用户提交订单并完成支付，系统扣减库存并生成支付流水","flowchart":"graph LR\nA[提交订单] --> B[锁定库存]\nB --> C[发起支付]\nC --> D{支付成功?}\nD -->|是| E[扣减库存]\nD -->|否| F[释放库存]","tables":["dwd_order","dwd_order_item","dwd_payment_log"]},{"name":"售后退款","description":"用户申请退款，平台审核通过后原路退回资金并恢复库存","flowchart":"graph LR\nA[申请退款] --> B{审核通过?}\nB -->|是| C[退款打款]\nB -->|否| D[驳回申请]\nC --> E[恢复库存]","tables":["dwd_refund_apply","dwd_refund_log"]}],"tables":[{"name":"dwd_order","comment":"订单事实表","columns":[{"name":"order_id","type":"BIGINT","comment":"订单ID","isPk":true},{"name":"user_id","type":"BIGINT","comment":"用户ID"},{"name":"total_amount","type":"DECIMAL(10,2)","comment":"订单总额"},{"name":"discount_amount","type":"DECIMAL(10,2)","comment":"优惠金额"},{"name":"pay_amount","type":"DECIMAL(10,2)","comment":"实付金额"},{"name":"status","type":"TINYINT","comment":"状态 0待支付 1已支付 2已发货 3已完成 4已取消"},{"name":"create_time","type":"DATETIME","comment":"创建时间"}],"ddl":"CREATE TABLE dwd_order (\n  order_id BIGINT COMMENT '订单ID',\n  user_id BIGINT COMMENT '用户ID',\n  total_amount DECIMAL(10,2) COMMENT '订单总额',\n  discount_amount DECIMAL(10,2) COMMENT '优惠金额',\n  pay_amount DECIMAL(10,2) COMMENT '实付金额',\n  status TINYINT COMMENT '状态',\n  create_time DATETIME COMMENT '创建时间'\n) COMMENT '订单事实表';","data":[{"order_id":5001,"user_id":100,"total_amount":7999.00,"discount_amount":200.00,"pay_amount":7799.00,"status":3,"create_time":"2026-05-01 12:00:00"},{"order_id":5002,"user_id":101,"total_amount":10898.00,"discount_amount":0.00,"pay_amount":10898.00,"status":2,"create_time":"2026-05-02 15:30:00"},{"order_id":5003,"user_id":102,"total_amount":1899.00,"discount_amount":100.00,"pay_amount":1799.00,"status":1,"create_time":"2026-05-03 09:15:00"},{"order_id":5004,"user_id":100,"total_amount":2499.00,"discount_amount":0.00,"pay_amount":2499.00,"status":4,"create_time":"2026-05-03 14:00:00"},{"order_id":5005,"user_id":103,"total_amount":5999.00,"discount_amount":300.00,"pay_amount":5699.00,"status":3,"create_time":"2026-05-04 10:00:00"}]},{"name":"dwd_order_item","comment":"订单明细表","columns":[{"name":"item_id","type":"BIGINT","comment":"明细ID","isPk":true},{"name":"order_id","type":"BIGINT","comment":"订单ID"},{"name":"product_id","type":"BIGINT","comment":"商品ID"},{"name":"quantity","type":"INT","comment":"购买数量"},{"name":"unit_price","type":"DECIMAL(10,2)","comment":"成交单价"},{"name":"subtotal","type":"DECIMAL(10,2)","comment":"小计金额"}],"ddl":"CREATE TABLE dwd_order_item (\n  item_id BIGINT COMMENT '明细ID',\n  order_id BIGINT COMMENT '订单ID',\n  product_id BIGINT COMMENT '商品ID',\n  quantity INT COMMENT '购买数量',\n  unit_price DECIMAL(10,2) COMMENT '成交单价',\n  subtotal DECIMAL(10,2) COMMENT '小计金额'\n) COMMENT '订单明细表';","data":[{"item_id":1,"order_id":5001,"product_id":1001,"quantity":1,"unit_price":7999.00,"subtotal":7999.00},{"item_id":2,"order_id":5002,"product_id":1002,"quantity":1,"unit_price":8999.00,"subtotal":8999.00},{"item_id":3,"order_id":5002,"product_id":1003,"quantity":1,"unit_price":1899.00,"subtotal":1899.00},{"item_id":4,"order_id":5003,"product_id":1003,"quantity":1,"unit_price":1899.00,"subtotal":1899.00},{"item_id":5,"order_id":5004,"product_id":1004,"quantity":1,"unit_price":2499.00,"subtotal":2499.00}]},{"name":"dwd_payment_log","comment":"支付流水表","columns":[{"name":"pay_id","type":"BIGINT","comment":"支付ID","isPk":true},{"name":"order_id","type":"BIGINT","comment":"订单ID"},{"name":"pay_channel","type":"VARCHAR(32)","comment":"支付渠道 支付宝/微信/银联"},{"name":"pay_amount","type":"DECIMAL(10,2)","comment":"支付金额"},{"name":"pay_time","type":"DATETIME","comment":"支付时间"},{"name":"status","type":"TINYINT","comment":"状态 0处理中 1成功 2失败"}],"ddl":"CREATE TABLE dwd_payment_log (\n  pay_id BIGINT COMMENT '支付ID',\n  order_id BIGINT COMMENT '订单ID',\n  pay_channel VARCHAR(32) COMMENT '支付渠道',\n  pay_amount DECIMAL(10,2) COMMENT '支付金额',\n  pay_time DATETIME COMMENT '支付时间',\n  status TINYINT COMMENT '状态 0处理中 1成功 2失败'\n) COMMENT '支付流水表';","data":[{"pay_id":1,"order_id":5001,"pay_channel":"支付宝","pay_amount":7799.00,"pay_time":"2026-05-01 12:05:00","status":1},{"pay_id":2,"order_id":5002,"pay_channel":"微信","pay_amount":10898.00,"pay_time":"2026-05-02 15:35:00","status":1},{"pay_id":3,"order_id":5003,"pay_channel":"支付宝","pay_amount":1799.00,"pay_time":"2026-05-03 09:20:00","status":1},{"pay_id":4,"order_id":5004,"pay_channel":"微信","pay_amount":2499.00,"pay_time":"2026-05-03 14:05:00","status":2},{"pay_id":5,"order_id":5005,"pay_channel":"银联","pay_amount":5699.00,"pay_time":"2026-05-04 10:05:00","status":1}]},{"name":"dwd_refund_apply","comment":"退款申请表","columns":[{"name":"refund_id","type":"BIGINT","comment":"退款ID","isPk":true},{"name":"order_id","type":"BIGINT","comment":"订单ID"},{"name":"user_id","type":"BIGINT","comment":"用户ID"},{"name":"refund_amount","type":"DECIMAL(10,2)","comment":"申请退款金额"},{"name":"reason","type":"VARCHAR(256)","comment":"退款原因"},{"name":"status","type":"TINYINT","comment":"状态 0审核中 1通过 2驳回"},{"name":"apply_time","type":"DATETIME","comment":"申请时间"}],"ddl":"CREATE TABLE dwd_refund_apply (\n  refund_id BIGINT COMMENT '退款ID',\n  order_id BIGINT COMMENT '订单ID',\n  user_id BIGINT COMMENT '用户ID',\n  refund_amount DECIMAL(10,2) COMMENT '申请退款金额',\n  reason VARCHAR(256) COMMENT '退款原因',\n  status TINYINT COMMENT '状态 0审核中 1通过 2驳回',\n  apply_time DATETIME COMMENT '申请时间'\n) COMMENT '退款申请表';","data":[{"refund_id":1,"order_id":5004,"user_id":100,"refund_amount":2499.00,"reason":"拍错/多拍","status":1,"apply_time":"2026-05-03 16:00:00"},{"refund_id":2,"order_id":5001,"user_id":100,"refund_amount":7799.00,"reason":"七天无理由","status":0,"apply_time":"2026-05-05 10:00:00"}]},{"name":"dwd_refund_log","comment":"退款流水表","columns":[{"name":"log_id","type":"BIGINT","comment":"流水ID","isPk":true},{"name":"refund_id","type":"BIGINT","comment":"退款ID"},{"name":"refund_amount","type":"DECIMAL(10,2)","comment":"退款金额"},{"name":"refund_time","type":"DATETIME","comment":"退款到账时间"},{"name":"channel","type":"VARCHAR(32)","comment":"退款渠道"}],"ddl":"CREATE TABLE dwd_refund_log (\n  log_id BIGINT COMMENT '流水ID',\n  refund_id BIGINT COMMENT '退款ID',\n  refund_amount DECIMAL(10,2) COMMENT '退款金额',\n  refund_time DATETIME COMMENT '退款到账时间',\n  channel VARCHAR(32) COMMENT '退款渠道'\n) COMMENT '退款流水表';","data":[{"log_id":1,"refund_id":1,"refund_amount":2499.00,"refund_time":"2026-05-04 09:00:00","channel":"微信"},{"log_id":2,"refund_id":2,"refund_amount":7799.00,"refund_time":"2026-05-06 14:00:00","channel":"支付宝"}]}],"relations":[{"from":"dwd_order","to":"dwd_order_item","type":"1:N","field":"order_id"},{"from":"dwd_order","to":"dwd_payment_log","type":"1:N","field":"order_id"},{"from":"dwd_order","to":"dwd_refund_apply","type":"1:N","field":"order_id"},{"from":"dwd_refund_apply","to":"dwd_refund_log","type":"1:N","field":"refund_id"}]},{"name":"用户中心","description":"用户注册、登录、会员等级、积分与画像管理","processes":[{"name":"注册与登录","description":"支持手机号、邮箱、第三方账号注册登录，记录登录行为","flowchart":"graph LR\nA[输入账号密码] --> B{验证通过?}\nB -->|是| C[生成Token]\nB -->|否| D[提示错误]\nC --> E[记录登录日志]","tables":["dim_user","dwd_login_log"]},{"name":"会员与积分","description":"根据消费累计成长值，自动升级会员等级，发放积分与权益","flowchart":"graph LR\nA[消费完成] --> B[计算成长值]\nB --> C{达到升级标准?}\nC -->|是| D[升级发权益]\nC -->|否| E[更新积分]","tables":["dwd_user_level","dwd_points_log"]}],"tables":[{"name":"dim_user","comment":"用户维度表","columns":[{"name":"user_id","type":"BIGINT","comment":"用户ID","isPk":true},{"name":"username","type":"VARCHAR(64)","comment":"用户名"},{"name":"phone","type":"VARCHAR(20)","comment":"手机号"},{"name":"register_time","type":"DATETIME","comment":"注册时间"},{"name":"level","type":"TINYINT","comment":"会员等级 1普通 2银卡 3金卡 4钻石"},{"name":"status","type":"TINYINT","comment":"状态 0禁用 1正常"}],"ddl":"CREATE TABLE dim_user (\n  user_id BIGINT COMMENT '用户ID',\n  username VARCHAR(64) COMMENT '用户名',\n  phone VARCHAR(20) COMMENT '手机号',\n  register_time DATETIME COMMENT '注册时间',\n  level TINYINT COMMENT '会员等级',\n  status TINYINT COMMENT '状态 0禁用 1正常'\n) COMMENT '用户维度表';","data":[{"user_id":100,"username":"zhangsan","phone":"13800138000","register_time":"2025-01-15 10:00:00","level":3,"status":1},{"user_id":101,"username":"lisi","phone":"13900139000","register_time":"2025-03-20 14:00:00","level":2,"status":1},{"user_id":102,"username":"wangwu","phone":"13700137000","register_time":"2025-06-10 09:00:00","level":1,"status":1},{"user_id":103,"username":"zhaoliu","phone":"13600136000","register_time":"2025-08-05 16:00:00","level":4,"status":1},{"user_id":104,"username":"sunqi","phone":"13500135000","register_time":"2025-11-11 11:00:00","level":1,"status":0}]},{"name":"dwd_login_log","comment":"登录日志表","columns":[{"name":"log_id","type":"BIGINT","comment":"日志ID","isPk":true},{"name":"user_id","type":"BIGINT","comment":"用户ID"},{"name":"login_time","type":"DATETIME","comment":"登录时间"},{"name":"ip","type":"VARCHAR(45)","comment":"登录IP"},{"name":"device","type":"VARCHAR(64)","comment":"设备类型 iOS/Android/Web"},{"name":"status","type":"TINYINT","comment":"状态 0失败 1成功"}],"ddl":"CREATE TABLE dwd_login_log (\n  log_id BIGINT COMMENT '日志ID',\n  user_id BIGINT COMMENT '用户ID',\n  login_time DATETIME COMMENT '登录时间',\n  ip VARCHAR(45) COMMENT '登录IP',\n  device VARCHAR(64) COMMENT '设备类型',\n  status TINYINT COMMENT '状态 0失败 1成功'\n) COMMENT '登录日志表';","data":[{"log_id":1,"user_id":100,"login_time":"2026-05-01 08:30:00","ip":"192.168.1.10","device":"iOS","status":1},{"log_id":2,"user_id":101,"login_time":"2026-05-01 09:00:00","ip":"192.168.1.11","device":"Web","status":1},{"log_id":3,"user_id":102,"login_time":"2026-05-01 10:15:00","ip":"192.168.1.12","device":"Android","status":0},{"log_id":4,"user_id":100,"login_time":"2026-05-02 12:00:00","ip":"192.168.1.10","device":"iOS","status":1},{"log_id":5,"user_id":103,"login_time":"2026-05-02 14:30:00","ip":"192.168.1.13","device":"Web","status":1}]},{"name":"dwd_user_level","comment":"用户等级变更表","columns":[{"name":"change_id","type":"BIGINT","comment":"变更ID","isPk":true},{"name":"user_id","type":"BIGINT","comment":"用户ID"},{"name":"old_level","type":"TINYINT","comment":"原等级"},{"name":"new_level","type":"TINYINT","comment":"新等级"},{"name":"change_time","type":"DATETIME","comment":"变更时间"},{"name":"reason","type":"VARCHAR(128)","comment":"变更原因"}],"ddl":"CREATE TABLE dwd_user_level (\n  change_id BIGINT COMMENT '变更ID',\n  user_id BIGINT COMMENT '用户ID',\n  old_level TINYINT COMMENT '原等级',\n  new_level TINYINT COMMENT '新等级',\n  change_time DATETIME COMMENT '变更时间',\n  reason VARCHAR(128) COMMENT '变更原因'\n) COMMENT '用户等级变更表';","data":[{"change_id":1,"user_id":100,"old_level":2,"new_level":3,"change_time":"2026-04-01 00:00:00","reason":"月度消费达标"},{"change_id":2,"user_id":103,"old_level":3,"new_level":4,"change_time":"2026-04-15 00:00:00","reason":"年度累计消费达标"},{"change_id":3,"user_id":101,"old_level":1,"new_level":2,"change_time":"2026-05-01 00:00:00","reason":"月度消费达标"}]},{"name":"dwd_points_log","comment":"积分流水表","columns":[{"name":"points_id","type":"BIGINT","comment":"积分ID","isPk":true},{"name":"user_id","type":"BIGINT","comment":"用户ID"},{"name":"change_type","type":"TINYINT","comment":"变动类型 1获取 2消耗 3过期"},{"name":"change_points","type":"INT","comment":"变动积分"},{"name":"balance_points","type":"INT","comment":"结余积分"},{"name":"operate_time","type":"DATETIME","comment":"操作时间"}],"ddl":"CREATE TABLE dwd_points_log (\n  points_id BIGINT COMMENT '积分ID',\n  user_id BIGINT COMMENT '用户ID',\n  change_type TINYINT COMMENT '变动类型 1获取 2消耗 3过期',\n  change_points INT COMMENT '变动积分',\n  balance_points INT COMMENT '结余积分',\n  operate_time DATETIME COMMENT '操作时间'\n) COMMENT '积分流水表';","data":[{"points_id":1,"user_id":100,"change_type":1,"change_points":780,"balance_points":2500,"operate_time":"2026-05-01 12:05:00"},{"points_id":2,"user_id":100,"change_type":2,"change_points":500,"balance_points":2000,"operate_time":"2026-05-02 10:00:00"},{"points_id":3,"user_id":101,"change_type":1,"change_points":1090,"balance_points":1500,"operate_time":"2026-05-02 15:35:00"},{"points_id":4,"user_id":102,"change_type":1,"change_points":180,"balance_points":300,"operate_time":"2026-05-03 09:20:00"},{"points_id":5,"user_id":103,"change_type":1,"change_points":570,"balance_points":5000,"operate_time":"2026-05-04 10:05:00"}]}],"relations":[{"from":"dim_user","to":"dwd_login_log","type":"1:N","field":"user_id"},{"from":"dim_user","to":"dwd_user_level","type":"1:N","field":"user_id"},{"from":"dim_user","to":"dwd_points_log","type":"1:N","field":"user_id"}]},{"name":"营销推广","description":"优惠券、满减、秒杀、拼团等营销活动配置与效果追踪","processes":[{"name":"优惠券发放与核销","description":"后台配置券规则，用户领取后下单自动抵扣，记录核销流水","flowchart":"graph LR\nA[配置券规则] --> B[用户领取]\nB --> C[下单抵扣]\nC --> D[核销记录]\nD --> E[财务结算]","tables":["dim_coupon","dwd_coupon_issue","dwd_coupon_use"]},{"name":"活动效果分析","description":"监控活动曝光、点击、转化数据，生成ROI报表","flowchart":"graph LR\nA[活动上线] --> B[曝光点击]\nB --> C[转化下单]\nC --> D[计算ROI]\nD --> E[输出报表]","tables":["dwd_campaign_log","dwd_campaign_roi"]}],"tables":[{"name":"dim_coupon","comment":"优惠券维度表","columns":[{"name":"coupon_id","type":"BIGINT","comment":"券ID","isPk":true},{"name":"coupon_name","type":"VARCHAR(128)","comment":"券名称"},{"name":"type","type":"TINYINT","comment":"类型 1满减 2折扣 3无门槛"},{"name":"threshold","type":"DECIMAL(10,2)","comment":"使用门槛"},{"name":"discount","type":"DECIMAL(10,2)","comment":"优惠金额/折扣率"},{"name":"valid_start","type":"DATETIME","comment":"生效开始时间"},{"name":"valid_end","type":"DATETIME","comment":"生效结束时间"}],"ddl":"CREATE TABLE dim_coupon (\n  coupon_id BIGINT COMMENT '券ID',\n  coupon_name VARCHAR(128) COMMENT '券名称',\n  type TINYINT COMMENT '类型 1满减 2折扣 3无门槛',\n  threshold DECIMAL(10,2) COMMENT '使用门槛',\n  discount DECIMAL(10,2) COMMENT '优惠金额/折扣率',\n  valid_start DATETIME COMMENT '生效开始时间',\n  valid_end DATETIME COMMENT '生效结束时间'\n) COMMENT '优惠券维度表';","data":[{"coupon_id":1,"coupon_name":"五一满500减50","type":1,"threshold":500.00,"discount":50.00,"valid_start":"2026-05-01 00:00:00","valid_end":"2026-05-07 23:59:59"},{"coupon_id":2,"coupon_name":"新用户无门槛10元","type":3,"threshold":0.00,"discount":10.00,"valid_start":"2026-01-01 00:00:00","valid_end":"2026-12-31 23:59:59"},{"coupon_id":3,"coupon_name":"数码类9折券","type":2,"threshold":1000.00,"discount":0.90,"valid_start":"2026-05-01 00:00:00","valid_end":"2026-05-31 23:59:59"}]},{"name":"dwd_coupon_issue","comment":"优惠券发放表","columns":[{"name":"issue_id","type":"BIGINT","comment":"发放ID","isPk":true},{"name":"coupon_id","type":"BIGINT","comment":"券ID"},{"name":"user_id","type":"BIGINT","comment":"用户ID"},{"name":"issue_time","type":"DATETIME","comment":"发放时间"},{"name":"status","type":"TINYINT","comment":"状态 0未使用 1已使用 2已过期"}],"ddl":"CREATE TABLE dwd_coupon_issue (\n  issue_id BIGINT COMMENT '发放ID',\n  coupon_id BIGINT COMMENT '券ID',\n  user_id BIGINT COMMENT '用户ID',\n  issue_time DATETIME COMMENT '发放时间',\n  status TINYINT COMMENT '状态 0未使用 1已使用 2已过期'\n) COMMENT '优惠券发放表';","data":[{"issue_id":1,"coupon_id":1,"user_id":100,"issue_time":"2026-05-01 08:00:00","status":1},{"issue_id":2,"coupon_id":1,"user_id":101,"issue_time":"2026-05-01 09:00:00","status":0},{"issue_id":3,"coupon_id":2,"user_id":102,"issue_time":"2026-05-02 10:00:00","status":0},{"issue_id":4,"coupon_id":3,"user_id":103,"issue_time":"2026-05-01 12:00:00","status":1},{"issue_id":5,"coupon_id":1,"user_id":100,"issue_time":"2026-05-03 14:00:00","status":0}]},{"name":"dwd_coupon_use","comment":"优惠券核销表","columns":[{"name":"use_id","type":"BIGINT","comment":"核销ID","isPk":true},{"name":"issue_id","type":"BIGINT","comment":"发放ID"},{"name":"order_id","type":"BIGINT","comment":"订单ID"},{"name":"use_time","type":"DATETIME","comment":"核销时间"},{"name":"discount_amount","type":"DECIMAL(10,2)","comment":"抵扣金额"}],"ddl":"CREATE TABLE dwd_coupon_use (\n  use_id BIGINT COMMENT '核销ID',\n  issue_id BIGINT COMMENT '发放ID',\n  order_id BIGINT COMMENT '订单ID',\n  use_time DATETIME COMMENT '核销时间',\n  discount_amount DECIMAL(10,2) COMMENT '抵扣金额'\n) COMMENT '优惠券核销表';","data":[{"use_id":1,"issue_id":1,"order_id":5001,"use_time":"2026-05-01 12:00:00","discount_amount":50.00},{"use_id":2,"issue_id":4,"order_id":5005,"use_time":"2026-05-04 10:00:00","discount_amount":300.00}]},{"name":"dwd_campaign_log","comment":"活动日志表","columns":[{"name":"log_id","type":"BIGINT","comment":"日志ID","isPk":true},{"name":"campaign_id","type":"BIGINT","comment":"活动ID"},{"name":"event_type","type":"VARCHAR(32)","comment":"事件类型 曝光/点击/转化"},{"name":"user_id","type":"BIGINT","comment":"用户ID"},{"name":"event_time","type":"DATETIME","comment":"事件时间"}],"ddl":"CREATE TABLE dwd_campaign_log (\n  log_id BIGINT COMMENT '日志ID',\n  campaign_id BIGINT COMMENT '活动ID',\n  event_type VARCHAR(32) COMMENT '事件类型',\n  user_id BIGINT COMMENT '用户ID',\n  event_time DATETIME COMMENT '事件时间'\n) COMMENT '活动日志表';","data":[{"log_id":1,"campaign_id":10,"event_type":"曝光","user_id":100,"event_time":"2026-05-01 08:00:00"},{"log_id":2,"campaign_id":10,"event_type":"点击","user_id":100,"event_time":"2026-05-01 08:05:00"},{"log_id":3,"campaign_id":10,"event_type":"转化","user_id":100,"event_time":"2026-05-01 12:00:00"},{"log_id":4,"campaign_id":10,"event_type":"曝光","user_id":101,"event_time":"2026-05-01 09:00:00"},{"log_id":5,"campaign_id":10,"event_type":"点击","user_id":101,"event_time":"2026-05-01 09:10:00"}]},{"name":"dwd_campaign_roi","comment":"活动ROI表","columns":[{"name":"roi_id","type":"BIGINT","comment":"ROI ID","isPk":true},{"name":"campaign_id","type":"BIGINT","comment":"活动ID"},{"name":"cost","type":"DECIMAL(10,2)","comment":"活动成本"},{"name":"revenue","type":"DECIMAL(10,2)","comment":"活动带来收入"},{"name":"roi","type":"DECIMAL(10,2)","comment":"投资回报率"},{"name":"stat_date","type":"DATE","comment":"统计日期"}],"ddl":"CREATE TABLE dwd_campaign_roi (\n  roi_id BIGINT COMMENT 'ROI ID',\n  campaign_id BIGINT COMMENT '活动ID',\n  cost DECIMAL(10,2) COMMENT '活动成本',\n  revenue DECIMAL(10,2) COMMENT '活动带来收入',\n  roi DECIMAL(10,2) COMMENT '投资回报率',\n  stat_date DATE COMMENT '统计日期'\n) COMMENT '活动ROI表';","data":[{"roi_id":1,"campaign_id":10,"cost":50000.00,"revenue":250000.00,"roi":5.00,"stat_date":"2026-05-01"},{"roi_id":2,"campaign_id":10,"cost":50000.00,"revenue":320000.00,"roi":6.40,"stat_date":"2026-05-02"},{"roi_id":3,"campaign_id":11,"cost":20000.00,"revenue":80000.00,"roi":4.00,"stat_date":"2026-05-01"}]}],"relations":[{"from":"dim_coupon","to":"dwd_coupon_issue","type":"1:N","field":"coupon_id"},{"from":"dwd_coupon_issue","to":"dwd_coupon_use","type":"1:N","field":"issue_id"},{"from":"dwd_campaign_log","to":"dwd_campaign_roi","type":"N:1","field":"campaign_id"}]},{"name":"物流履约","description":"订单发货、运输轨迹跟踪、签收确认与异常处理","processes":[{"name":"发货与运输","description":"仓库拣货打包，交接物流公司，实时更新运输节点","flowchart":"graph LR\nA[订单支付] --> B[仓库拣货]\nB --> C[打包发货]\nC --> D[物流揽收]\nD --> E[运输中]\nE --> F[派送签收]","tables":["dwd_shipping_order","dwd_logistics_trace"]},{"name":"异常处理","description":"包裹丢失、破损、延误等异常上报与客诉处理","flowchart":"graph LR\nA[异常上报] --> B{类型判定}\nB -->|丢件| C[理赔流程]\nB -->|破损| D[补发流程]\nB -->|延误| E[催件流程]","tables":["dwd_logistics_exception"]}],"tables":[{"name":"dwd_shipping_order","comment":"发货单表","columns":[{"name":"ship_id","type":"BIGINT","comment":"发货单ID","isPk":true},{"name":"order_id","type":"BIGINT","comment":"订单ID"},{"name":"logistics_company","type":"VARCHAR(64)","comment":"物流公司"},{"name":"tracking_no","type":"VARCHAR(128)","comment":"运单号"},{"name":"ship_time","type":"DATETIME","comment":"发货时间"},{"name":"status","type":"TINYINT","comment":"状态 0待发货 1已发货 2已签收 3异常"}],"ddl":"CREATE TABLE dwd_shipping_order (\n  ship_id BIGINT COMMENT '发货单ID',\n  order_id BIGINT COMMENT '订单ID',\n  logistics_company VARCHAR(64) COMMENT '物流公司',\n  tracking_no VARCHAR(128) COMMENT '运单号',\n  ship_time DATETIME COMMENT '发货时间',\n  status TINYINT COMMENT '状态 0待发货 1已发货 2已签收 3异常'\n) COMMENT '发货单表';","data":[{"ship_id":1,"order_id":5001,"logistics_company":"顺丰速运","tracking_no":"SF1234567890","ship_time":"2026-05-01 14:00:00","status":2},{"ship_id":2,"order_id":5002,"logistics_company":"京东物流","tracking_no":"JD0987654321","ship_time":"2026-05-02 16:00:00","status":1},{"ship_id":3,"order_id":5005,"logistics_company":"中通快递","tracking_no":"ZT1122334455","ship_time":"2026-05-04 11:00:00","status":1}]},{"name":"dwd_logistics_trace","comment":"物流轨迹表","columns":[{"name":"trace_id","type":"BIGINT","comment":"轨迹ID","isPk":true},{"name":"tracking_no","type":"VARCHAR(128)","comment":"运单号"},{"name":"node_name","type":"VARCHAR(128)","comment":"节点名称"},{"name":"node_desc","type":"VARCHAR(256)","comment":"节点描述"},{"name":"trace_time","type":"DATETIME","comment":"轨迹时间"}],"ddl":"CREATE TABLE dwd_logistics_trace (\n  trace_id BIGINT COMMENT '轨迹ID',\n  tracking_no VARCHAR(128) COMMENT '运单号',\n  node_name VARCHAR(128) COMMENT '节点名称',\n  node_desc VARCHAR(256) COMMENT '节点描述',\n  trace_time DATETIME COMMENT '轨迹时间'\n) COMMENT '物流轨迹表';","data":[{"trace_id":1,"tracking_no":"SF1234567890","node_name":"已揽收","node_desc":"顺丰速运已揽收","trace_time":"2026-05-01 15:00:00"},{"trace_id":2,"tracking_no":"SF1234567890","node_name":"运输中","node_desc":"快件到达【北京顺义集散中心】","trace_time":"2026-05-01 20:00:00"},{"trace_id":3,"tracking_no":"SF1234567890","node_name":"派送中","node_desc":"快件正在派送","trace_time":"2026-05-02 08:00:00"},{"trace_id":4,"tracking_no":"SF1234567890","node_name":"已签收","node_desc":"已签收，签收人凭取货码签收","trace_time":"2026-05-02 10:30:00"},{"trace_id":5,"tracking_no":"JD0987654321","node_name":"已揽收","node_desc":"京东物流已揽收","trace_time":"2026-05-02 17:00:00"}]},{"name":"dwd_logistics_exception","comment":"物流异常表","columns":[{"name":"exception_id","type":"BIGINT","comment":"异常ID","isPk":true},{"name":"tracking_no","type":"VARCHAR(128)","comment":"运单号"},{"name":"exception_type","type":"TINYINT","comment":"异常类型 1丢件 2破损 3延误"},{"name":"report_time","type":"DATETIME","comment":"上报时间"},{"name":"status","type":"TINYINT","comment":"处理状态 0处理中 1已解决 2已关闭"},{"name":"remark","type":"VARCHAR(512)","comment":"处理备注"}],"ddl":"CREATE TABLE dwd_logistics_exception (\n  exception_id BIGINT COMMENT '异常ID',\n  tracking_no VARCHAR(128) COMMENT '运单号',\n  exception_type TINYINT COMMENT '异常类型 1丢件 2破损 3延误',\n  report_time DATETIME COMMENT '上报时间',\n  status TINYINT COMMENT '处理状态',\n  remark VARCHAR(512) COMMENT '处理备注'\n) COMMENT '物流异常表';","data":[{"exception_id":1,"tracking_no":"ZT1122334455","exception_type":3,"report_time":"2026-05-05 09:00:00","status":0,"remark":"包裹滞留中转站超48小时"},{"exception_id":2,"tracking_no":"SF1234567890","exception_type":2,"report_time":"2026-05-02 11:00:00","status":1,"remark":"外包装轻微破损，内件完好，已补偿10元"}]}],"relations":[{"from":"dwd_shipping_order","to":"dwd_logistics_trace","type":"1:N","field":"tracking_no"},{"from":"dwd_shipping_order","to":"dwd_logistics_exception","type":"1:N","field":"tracking_no"}]}]};
+
+    function loadDemoData() {
+        BIZ_DATA = DEMO_DATA;
         renderHeader();
         renderSidebar();
-        renderTabs();
         selectBizLine(0, 0);
         if (typeof mermaid !== 'undefined') {
             mermaid.initialize({ startOnLoad: false, theme: 'default' });
+            setTimeout(function() {
+                mermaid.run({ nodes: document.querySelectorAll('.mermaid') });
+            }, 100);
+        }
+        document.getElementById('header-info').style.display = 'flex';
+        document.getElementById('industry-input').disabled = true;
+        document.getElementById('depth-select').disabled = true;
+        document.getElementById('generate-btn').textContent = '已生成';
+        document.getElementById('generate-btn').disabled = true;
+    }
+
+    function init() {
+        renderTabs();
+        bindToggleAll();
+        if (BIZ_DATA) {
+            loadDemoData();
         }
     }
 
     function renderHeader() {
+        document.getElementById('industry-input').value = BIZ_DATA.industry;
+        document.getElementById('depth-select').value = BIZ_DATA.depth >= 3 ? '3' : String(BIZ_DATA.depth);
         document.getElementById('industry-display').textContent = '行业：' + BIZ_DATA.industry;
-        const depthLabels = { 1: '轻量级', 2: '中等', default: '深度建模' };
-        document.getElementById('depth-display').textContent = '深度：' + (depthLabels[BIZ_DATA.depth] || depthLabels.default) + '(' + BIZ_DATA.depth + ')';
+        var depthLabels = { 1: '轻量级', 2: '中等' };
+        document.getElementById('depth-display').textContent = '深度：' + (depthLabels[BIZ_DATA.depth] || '深度建模') + '(' + BIZ_DATA.depth + ')';
         document.getElementById('time-display').textContent = '生成：' + BIZ_DATA.generateTime;
     }
 
     function renderSidebar() {
-        const nav = document.getElementById('biz-nav');
-        let html = '';
-        BIZ_DATA.businessLines.forEach((line, i) => {
+        var nav = document.getElementById('biz-nav');
+        var html = '';
+        BIZ_DATA.businessLines.forEach(function(line, i) {
             html += '<div class="biz-line">';
-            html += '<div class="biz-line-header" onclick="toggleBizLine(' + i + ')">';
-            html += '<span>' + line.name + '</span><span class="arrow">▶</span>';
+            html += '<div class="biz-line-header" data-idx="' + i + '">';
+            html += '<span>' + escapeHtml(line.name) + '</span><span class="arrow">▶</span>';
             html += '</div>';
             html += '<div class="process-list" id="processes-' + i + '">';
-            line.processes.forEach((proc, j) => {
-                html += '<div class="process-item" id="proc-' + i + '-' + j + '" onclick="selectProcess(' + i + ',' + j + ')">' + proc.name + '</div>';
+            line.processes.forEach(function(proc, j) {
+                html += '<div class="process-item" id="proc-' + i + '-' + j + '" data-biz="' + i + '" data-proc="' + j + '">' + escapeHtml(proc.name) + '</div>';
             });
             html += '</div></div>';
         });
         nav.innerHTML = html;
+
+        nav.querySelectorAll('.biz-line-header').forEach(function(header) {
+            header.addEventListener('click', function() {
+                var idx = parseInt(this.getAttribute('data-idx'));
+                toggleBizLine(idx);
+            });
+        });
+
+        nav.querySelectorAll('.process-item').forEach(function(item) {
+            item.addEventListener('click', function() {
+                var biz = parseInt(this.getAttribute('data-biz'));
+                var proc = parseInt(this.getAttribute('data-proc'));
+                selectBizLine(biz, proc);
+            });
+        });
     }
 
     function toggleBizLine(index) {
-        const list = document.getElementById('processes-' + index);
-        const header = list.previousElementSibling;
+        var list = document.getElementById('processes-' + index);
+        var header = list.previousElementSibling;
         list.classList.toggle('show');
         header.classList.toggle('expanded');
     }
 
-    let allExpanded = false;
-    function toggleAll() {
-        allExpanded = !allExpanded;
-        document.querySelectorAll('.process-list').forEach(list => {
-            list.classList.toggle('show', allExpanded);
+    function bindToggleAll() {
+        document.getElementById('toggle-all-btn').addEventListener('click', function() {
+            allExpanded = !allExpanded;
+            document.querySelectorAll('.process-list').forEach(function(list) {
+                list.classList.toggle('show', allExpanded);
+            });
+            document.querySelectorAll('.biz-line-header').forEach(function(header) {
+                header.classList.toggle('expanded', allExpanded);
+            });
+            this.textContent = allExpanded ? '全部收起' : '全部展开';
         });
-        document.querySelectorAll('.biz-line-header').forEach(header => {
-            header.classList.toggle('expanded', allExpanded);
-        });
-        document.getElementById('toggle-all-btn').textContent = allExpanded ? '全部收起' : '全部展开';
     }
 
     function selectBizLine(bizIndex, procIndex) {
         currentBizLine = bizIndex;
         currentProcess = procIndex;
-        document.querySelectorAll('.process-item').forEach(el => el.classList.remove('active'));
-        const el = document.getElementById('proc-' + bizIndex + '-' + procIndex);
+        document.querySelectorAll('.process-item').forEach(function(el) { el.classList.remove('active'); });
+        var el = document.getElementById('proc-' + bizIndex + '-' + procIndex);
         if (el) el.classList.add('active');
-        const line = BIZ_DATA.businessLines[bizIndex];
-        const proc = line.processes[procIndex];
+        var line = BIZ_DATA.businessLines[bizIndex];
+        var proc = line.processes[procIndex];
         renderProcessTab(proc);
         renderSchemaTab(line, proc);
         renderDataTab(line, proc);
         renderERTab();
     }
 
-    function selectProcess(bizIndex, procIndex) {
-        selectBizLine(bizIndex, procIndex);
-    }
-
     function renderTabs() {
-        document.querySelectorAll('.tab-btn').forEach(btn => {
+        document.querySelectorAll('.tab-btn').forEach(function(btn) {
             btn.addEventListener('click', function() {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+                document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+                document.querySelectorAll('.tab-pane').forEach(function(p) { p.classList.remove('active'); });
                 this.classList.add('active');
-                document.getElementById('tab-' + this.dataset.tab).classList.add('active');
+                document.getElementById('tab-' + this.getAttribute('data-tab')).classList.add('active');
             });
         });
     }
 
     function renderProcessTab(proc) {
-        const container = document.getElementById('tab-process');
-        let html = '<div class="card"><h3>' + proc.name + '</h3>';
-        html += '<p>' + proc.description + '</p></div>';
+        var container = document.getElementById('tab-process');
+        var html = '<div class="card"><h3>' + escapeHtml(proc.name) + '</h3>';
+        html += '<p>' + escapeHtml(proc.description) + '</p></div>';
         if (proc.flowchart) {
             html += '<div class="card"><h3>流程图</h3>';
             html += '<div class="mermaid">' + proc.flowchart + '</div></div>';
         }
         html += '<div class="card"><h3>涉及数据表</h3><ul>';
-        proc.tables.forEach(t => { html += '<li>' + t + '</li>'; });
+        proc.tables.forEach(function(t) { html += '<li>' + escapeHtml(t) + '</li>'; });
         html += '</ul></div>';
         container.innerHTML = html;
         if (typeof mermaid !== 'undefined') {
-            mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+            setTimeout(function() {
+                mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
+            }, 100);
         }
     }
 
     function renderSchemaTab(line, proc) {
-        const container = document.getElementById('tab-schema');
-        let html = '';
-        const tables = line.tables.filter(t => proc.tables.includes(t.name));
-        tables.forEach(table => {
-            html += '<div class="card"><h3>' + table.name + ' <span style="color:#8c8c8c;font-size:12px;font-weight:normal">' + table.comment + '</span></h3>';
+        var container = document.getElementById('tab-schema');
+        var html = '';
+        var tables = line.tables.filter(function(t) { return proc.tables.indexOf(t.name) !== -1; });
+        tables.forEach(function(table) {
+            html += '<div class="card"><h3>' + escapeHtml(table.name) + ' <span style="color:#8c8c8c;font-size:12px;font-weight:normal">' + escapeHtml(table.comment) + '</span></h3>';
             html += '<table><thead><tr><th>字段名</th><th>类型</th><th>说明</th></tr></thead><tbody>';
-            table.columns.forEach(col => {
-                html += '<tr><td>' + col.name;
+            table.columns.forEach(function(col) {
+                html += '<tr><td>' + escapeHtml(col.name);
                 if (col.isPk) html += ' <span class="pk-badge">PK</span>';
-                html += '</td><td><span class="type-tag">' + col.type + '</span></td>';
-                html += '<td>' + col.comment + '</td></tr>';
+                html += '</td><td><span class="type-tag">' + escapeHtml(col.type) + '</span></td>';
+                html += '<td>' + escapeHtml(col.comment) + '</td></tr>';
             });
             html += '</tbody></table>';
-            html += '<div style="margin-top:12px"><div class="code-block"><button class="copy-btn" onclick="copyDDL(this)">复制</button><pre><code class="language-sql">' + escapeHtml(table.ddl) + '</code></pre></div></div>';
+            html += '<div style="margin-top:12px"><div class="code-block"><button class="copy-btn">复制</button><pre><code class="language-sql">' + escapeHtml(table.ddl) + '</code></pre></div></div>';
             html += '</div>';
         });
         container.innerHTML = html;
         if (typeof hljs !== 'undefined') {
-            container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+            container.querySelectorAll('pre code').forEach(function(block) { hljs.highlightElement(block); });
         }
+        container.querySelectorAll('.copy-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var code = this.nextElementSibling.querySelector('code').textContent;
+                navigator.clipboard.writeText(code).then(function() {
+                    var self = btn;
+                    self.textContent = '已复制';
+                    setTimeout(function() { self.textContent = '复制'; }, 1500);
+                });
+            });
+        });
     }
 
     function renderDataTab(line, proc) {
-        const container = document.getElementById('tab-data');
-        let html = '';
-        const tables = line.tables.filter(t => proc.tables.includes(t.name));
-        tables.forEach(table => {
-            html += '<div class="card"><h3>' + table.name + ' - 模拟数据 (' + table.data.length + ' 条)</h3>';
+        var container = document.getElementById('tab-data');
+        var html = '';
+        var tables = line.tables.filter(function(t) { return proc.tables.indexOf(t.name) !== -1; });
+        tables.forEach(function(table) {
+            html += '<div class="card"><h3>' + escapeHtml(table.name) + ' - 模拟数据 (' + table.data.length + ' 条)</h3>';
             if (table.data.length > 0) {
                 html += '<div class="data-table-wrap"><table><thead><tr>';
-                table.columns.forEach(col => { html += '<th>' + col.name + '</th>'; });
+                table.columns.forEach(function(col) { html += '<th>' + escapeHtml(col.name) + '</th>'; });
                 html += '</tr></thead><tbody>';
-                table.data.forEach(row => {
+                table.data.forEach(function(row) {
                     html += '<tr>';
-                    table.columns.forEach(col => { html += '<td>' + escapeHtml(String(row[col.name] ?? '')) + '</td>'; });
+                    table.columns.forEach(function(col) {
+                        var val = row[col.name];
+                        html += '<td>' + escapeHtml(String(val !== null && val !== undefined ? val : '')) + '</td>';
+                    });
                     html += '</tr>';
                 });
                 html += '</tbody></table></div>';
-                html += '<div style="margin-top:12px"><div class="code-block"><button class="copy-btn" onclick="copySQL(this)">复制</button><pre><code class="language-sql">' + generateInserts(table) + '</code></pre></div></div>';
+                html += '<div style="margin-top:12px"><div class="code-block"><button class="copy-btn">复制</button><pre><code class="language-sql">' + escapeHtml(generateInserts(table)) + '</code></pre></div></div>';
             }
             html += '</div>';
         });
         container.innerHTML = html;
         if (typeof hljs !== 'undefined') {
-            container.querySelectorAll('pre code').forEach(block => hljs.highlightElement(block));
+            container.querySelectorAll('pre code').forEach(function(block) { hljs.highlightElement(block); });
         }
+        container.querySelectorAll('.copy-btn').forEach(function(btn) {
+            btn.addEventListener('click', function() {
+                var code = this.nextElementSibling.querySelector('code').textContent;
+                navigator.clipboard.writeText(code).then(function() {
+                    var self = btn;
+                    self.textContent = '已复制';
+                    setTimeout(function() { self.textContent = '复制'; }, 1500);
+                });
+            });
+        });
     }
 
     function renderERTab() {
-        const container = document.getElementById('tab-er');
-        let erDiagram = 'erDiagram\n';
-        BIZ_DATA.businessLines.forEach(line => {
-            if (line.relations) {
-                line.relations.forEach(rel => {
-                    const connector = rel.type === '1:1' ? '||--||' : rel.type === 'N:N' ? '}o--o{' : '||--o{';
-                    erDiagram += '    ' + rel.from + ' ' + connector + ' ' + rel.to + ' : "' + rel.field + '"\n';
+        var container = document.getElementById('tab-er');
+        var html = '<div class="card"><h3>ER 关系图</h3>';
+        html += '<div style="display:flex;flex-wrap:wrap;gap:16px;justify-content:center;">';
+        BIZ_DATA.businessLines.forEach(function(line) {
+            html += '<div style="background:#f6f8fa;border-radius:8px;padding:12px;min-width:200px;">';
+            html += '<h4 style="margin:0 0 8px 0;color:#1890ff;font-size:14px;">' + escapeHtml(line.name) + '</h4>';
+            html += '<div style="font-size:12px;color:#595959;">';
+            line.tables.forEach(function(table) {
+                html += '<div style="padding:2px 0;">📋 ' + escapeHtml(table.name) + '</div>';
+            });
+            html += '</div>';
+            if (line.relations && line.relations.length > 0) {
+                html += '<div style="margin-top:8px;padding-top:8px;border-top:1px solid #e8e8e8;font-size:11px;color:#8c8c8c;">';
+                line.relations.forEach(function(rel) {
+                    html += '<div>' + escapeHtml(rel.from) + ' → ' + escapeHtml(rel.to) + ' (' + rel.type + ' via ' + escapeHtml(rel.field) + ')</div>';
                 });
+                html += '</div>';
             }
+            html += '</div>';
         });
-        container.innerHTML = '<div class="card"><h3>ER 关系图</h3><div class="mermaid">' + erDiagram + '</div></div>';
-        if (typeof mermaid !== 'undefined') {
-            mermaid.run({ nodes: container.querySelectorAll('.mermaid') });
-        }
+        html += '</div></div>';
+        container.innerHTML = html;
         updateStats();
     }
 
     function updateStats() {
-        let tableCount = 0;
-        BIZ_DATA.businessLines.forEach(line => { tableCount += line.tables.length; });
+        var tableCount = 0;
+        BIZ_DATA.businessLines.forEach(function(line) { tableCount += line.tables.length; });
         document.getElementById('stats').textContent =
             '📦 共 ' + BIZ_DATA.businessLines.length + ' 个业务线 · ' + tableCount + ' 张表 · 深度：' + BIZ_DATA.depth + ' · 生成时间：' + BIZ_DATA.generateTime;
     }
 
     function escapeHtml(str) {
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     function generateInserts(table) {
         if (!table.data || table.data.length === 0) return '-- 无数据';
-        let sql = '';
-        table.data.forEach(row => {
-            const cols = table.columns.map(c => c.name).join(', ');
-            const vals = table.columns.map(c => {
-                const v = row[c.name];
+        var sql = '';
+        table.data.forEach(function(row) {
+            var cols = table.columns.map(function(c) { return c.name; }).join(', ');
+            var vals = table.columns.map(function(c) {
+                var v = row[c.name];
                 if (v === null || v === undefined) return 'NULL';
                 if (typeof v === 'number') return v;
                 return "'" + String(v).replace(/'/g, "''") + "'";
@@ -473,31 +569,10 @@ body {
         return sql;
     }
 
-    window.toggleBizLine = toggleBizLine;
-    window.selectProcess = selectProcess;
-
-    window.copyDDL = function(btn) {
-        const code = btn.nextElementSibling.querySelector('code').textContent;
-        navigator.clipboard.writeText(code).then(() => { btn.textContent = '已复制'; setTimeout(() => { btn.textContent = '复制'; }, 1500); });
-    };
-
-    window.copySQL = function(btn) {
-        const code = btn.nextElementSibling.querySelector('code').textContent;
-        navigator.clipboard.writeText(code).then(() => { btn.textContent = '已复制'; setTimeout(() => { btn.textContent = '复制'; }, 1500); });
-    };
-
-    document.getElementById('export-btn').addEventListener('click', function() {
-        const dataJson = JSON.stringify(BIZ_DATA, null, 2);
-        const now = new Date();
-        const ts = now.getFullYear() + String(now.getMonth()+1).padStart(2,'0') + String(now.getDate()).padStart(2,'0') + String(now.getHours()).padStart(2,'0') + String(now.getMinutes()).padStart(2,'0');
-        const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-        const blob = new Blob([html], { type: 'text/html' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = 'biz-scenario-' + BIZ_DATA.industry + '-' + ts + '.html';
-        a.click();
-        URL.revokeObjectURL(url);
+    document.getElementById('generate-btn').addEventListener('click', function() {
+        var industry = document.getElementById('industry-input').value.trim();
+        if (!industry) { alert('请输入行业名称'); return; }
+        loadDemoData();
     });
 
     init();

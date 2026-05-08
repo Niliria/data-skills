@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>业务场景模拟器</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/highlight.js@11/styles/github.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/highlight.js@11/highlight.min.js"></script>
+    <style>
+        /* CSS 在 Task 2 中填充 */
+    </style>
+</head>
+<body>
+    <div id="app">
+        <header class="header">
+            <h1>📊 业务场景模拟器</h1>
+            <div class="header-info">
+                <span id="industry-display"></span>
+                <span id="depth-display"></span>
+                <span id="time-display"></span>
+                <button id="export-btn" class="btn">导出 HTML</button>
+            </div>
+        </header>
+        <div class="main-container">
+            <aside class="sidebar">
+                <nav id="biz-nav"></nav>
+            </aside>
+            <main class="content">
+                <div class="tabs">
+                    <button class="tab-btn active" data-tab="process">业务流程</button>
+                    <button class="tab-btn" data-tab="schema">表结构</button>
+                    <button class="tab-btn" data-tab="data">模拟数据</button>
+                    <button class="tab-btn" data-tab="er">ER图</button>
+                </div>
+                <div class="tab-content">
+                    <div id="tab-process" class="tab-pane active"></div>
+                    <div id="tab-schema" class="tab-pane"></div>
+                    <div id="tab-data" class="tab-pane"></div>
+                    <div id="tab-er" class="tab-pane"></div>
+                </div>
+            </main>
+        </div>
+        <footer class="footer">
+            <span id="stats"></span>
+        </footer>
+    </div>
+
+    <script>
+        // 业务数据注入点 - Skill 执行时替换
+        const BIZ_DATA = /* BIZ_DATA_PLACEHOLDER */;
+    </script>
+    <script>
+        // JS 渲染逻辑在 Task 3 中填充
+    </script>
+</body>
+</html>

@@ -38,3 +38,8 @@ out/
 
 # Dependencies
 node_modules/
+
+.claude/
+.agents/
+
+skills-lock.json

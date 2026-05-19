@@ -1,0 +1,6 @@
+英文全称,英文缩写,中文解释,字段类型,业务域
+client_id,cid,客户唯一标识,STRING,crdt
+trade_amount,amt,交易金额，单位：元,DECIMAL(18,2),crdt
+trade_status,,交易状态：S-成功 F-失败 P-处理中,STRING,crdt
+order_no,on,订单编号,STRING,ord
+create_time,,记录创建时间,TIMESTAMP,

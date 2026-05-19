@@ -8,6 +8,41 @@ description: >
 
 # 数据治理 · DDL/SQL/血缘规范检查
 
+## 项目结构
+
+```
+Data-Governance/
+├── SKILL.md                    # 主入口文件（路由 + 汇总）
+├── sub-skills/                 # 子 skill 规则文件
+│   ├── SKILL-table.md          #   表级 DDL 规范检查
+│   ├── SKILL-field.md          #   字段级 DDL 规范检查
+│   ├── SKILL-standard.md       #   标准字段绑定检查
+│   ├── SKILL-sql.md            #   SQL 代码规范检查
+│   └── SKILL-lineage.md        #   血缘健康检查
+├── references/                 # 参考文件模板（仅作为格式参考，不直接使用）
+│   ├── table-business-domains_template.csv  # 表级检查：业务板块字典模板
+│   ├── sql-partition-fields_template.csv    # SQL检查：分区字段名清单模板
+│   ├── standard_fields_template.csv         # 标准字段库模板
+│   └── exempt_fields_template.csv           # 豁免字段库模板
+└── examples/                   # 输入示例文件
+    ├── sample_ddl.sql                      # DDL 示例（含表级/字段级问题）
+    ├── sample_sql.sql                      # SQL 示例（含代码规范/血缘问题）
+    ├── sample_standard_fields.csv          # 标准字段库示例
+    ├── sample_business_domains.csv         # 业务域字典示例
+    ├── sample_partition_fields.csv         # 分区字段清单示例
+    └── sample_exempt_fields.csv            # 豁免字段库示例
+```
+
+## 快速开始
+
+| 场景 | 操作 |
+|------|------|
+| **最简检查** | 上传 DDL/SQL 文件，说"帮我检查" → 自动根据内容类型路由 |
+| **完整检查** | 同时上传参考文件 + DDL + SQL → 启用业务域字典、分区字段等精确校验 |
+| **专项检查** | 上传对应类型文件，说"只看 XX" → 仅执行指定维度 |
+
+参考文件命名规则：去掉 `_template` 后缀后直接上传。例如复制 `references/table-business-domains_template.csv`，填入你自己的业务域数据后，在检查时一并上传。
+
 ## 概述
 
 本 skill 是数据治理规范检查的 **主入口**，根据用户的具体诉求自动路由到对应的子 skill。
@@ -17,11 +52,11 @@ description: >
 
 | 子 skill | 文件 | 职责 |
 |----------|------|------|
-| 表级 DDL 规范检查 | [SKILL-table.md](SKILL-table.md) | 检查表命名、分层前缀、字符规范、语义清晰度、表注释 |
-| 字段级 DDL 规范检查 | [SKILL-field.md](SKILL-field.md) | 检查字段命名、字段类型、字段注释、字段设计合理性 |
-| 标准字段绑定检查 | [SKILL-standard.md](SKILL-standard.md) | 基于标准字段库检查字段绑定、类型一致性、注释一致性 |
-| SQL 代码规范检查 | [SKILL-sql.md](SKILL-sql.md) | 检查 SQL 安全合规、性能优化、代码规范性 |
-| 血缘健康检查 | [SKILL-lineage.md](SKILL-lineage.md) | 检查表间依赖关系、越层依赖、血缘覆盖率、链路复杂度 |
+| 表级 DDL 规范检查 | [sub-skills/SKILL-table.md](sub-skills/SKILL-table.md) | 检查表命名、分层前缀、字符规范、语义清晰度、表注释 |
+| 字段级 DDL 规范检查 | [sub-skills/SKILL-field.md](sub-skills/SKILL-field.md) | 检查字段命名、字段类型、字段注释、字段设计合理性 |
+| 标准字段绑定检查 | [sub-skills/SKILL-standard.md](sub-skills/SKILL-standard.md) | 基于标准字段库检查字段绑定、类型一致性、注释一致性 |
+| SQL 代码规范检查 | [sub-skills/SKILL-sql.md](sub-skills/SKILL-sql.md) | 检查 SQL 安全合规、性能优化、代码规范性 |
+| 血缘健康检查 | [sub-skills/SKILL-lineage.md](sub-skills/SKILL-lineage.md) | 检查表间依赖关系、越层依赖、血缘覆盖率、链路复杂度 |
 
 ### 字段级检查的分流说明
 
@@ -34,8 +69,21 @@ SKILL-field.md 和 SKILL-standard.md 都涉及字段检查，但依据不同：
 
 **路由决策**：
 - 用户上传/提供了标准字段库文件 → 执行 SKILL-standard.md（标准绑定检查）
-- 用户未提供标准字段库文件 → 执行 SKILL-field.md（通用规范检查）
+- 用户未提供标准字段库文件（即使提到了"标准字段"、"标准库"等关键词）→ 执行 SKILL-field.md（通用规范检查），并在报告中注明"未提供标准字段库，本次使用通用规范检查"
 - 用户同时提供标准字段库且要求做通用规范检查 → 两者都执行
+
+### 参考文件提供方式
+
+以下子 skill 支持参考文件，用户可在检查时一并上传（和 DDL/SQL 文件放在同一条消息中）：
+
+| 参考文件 | 供哪个 skill 用 | 未上传时的回退行为 |
+|----------|----------------|-------------------|
+| `table-business-domains.csv`（业务域字典） | SKILL-table | 跳过业务板块缩写的合法性校验，遇到未知缩写标注"请确认业务板块缩写是否已注册" |
+| `sql-partition-fields.csv`（分区字段清单） | SKILL-sql | 使用内置默认列表：`dt`、`partition_date`、`p_date`、`month_id`、`day_id` |
+| 标准字段库 CSV | SKILL-standard | 不执行标准绑定检查，回退 SKILL-field.md（通用规范检查） |
+| 豁免字段库 CSV | SKILL-standard | 使用内置豁免清单：`create_time`、`insert_time`、`update_time` 等 9 个字段 |
+
+> `references/` 目录中的文件为格式模板（文件名带 `_template` 后缀）。使用时复制模板文件，填入自己的数据后，在检查时一并上传。skill 不会直接使用模板文件中的内容。
 
 ---
 
@@ -64,7 +112,7 @@ SKILL-field.md 和 SKILL-standard.md 都涉及字段检查，但依据不同：
 |-------------|--------|
 | "只看字段"、"只检查字段"、"字段问题"、"字段审查" | 仅执行字段级检查（有标准字段库→SKILL-standard.md；无→SKILL-field.md） |
 | "只看表名"、"只检查表结构"、"表级审查" | 仅执行表级检查 |
-| "只看标准字段"、"只查标准绑定"、"字段标准" | 仅执行标准字段绑定检查 |
+| "只看标准字段"、"只查标准绑定"、"字段标准" | 仅执行标准字段绑定检查（无标准字段库→回退 SKILL-field.md 并提示用户提供） |
 | "只看 SQL"、"不查血缘"、"SQL 问题" | 仅执行 SQL 检查 |
 | "只看血缘"、"表依赖"、"链路问题" | 仅执行血缘检查 |
 | "不要查表级"、"跳过命名检查" | 从默认结果中排除表级 + 字段级 |

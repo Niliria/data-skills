@@ -1,0 +1,6 @@
+分区字段名,说明
+dt,通用日期分区
+partition_date,日期分区
+p_date,简写日期分区
+month_id,月分区
+day_id,日分区

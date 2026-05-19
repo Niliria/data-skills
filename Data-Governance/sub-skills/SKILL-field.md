@@ -23,7 +23,7 @@ description: >
 输入为包含一个或多个 `CREATE TABLE` 语句的 DDL 文档。
 输出为 **Excel 文件**，包含「字段级问题」和「检查摘要」两个 sheet 页。
 
-> **边界说明**：本 skill 仅做字段级检查。表级检查请使用配套的「数据治理-表级DDL规范检查」skill。如需检查字段是否与团队标准字段库绑定，请使用配套的「数据治理-标准字段绑定检查」skill（SKILL-standard.md）。
+> **边界说明**：本 skill 仅做字段级检查。表级检查请使用配套的「数据治理-表级DDL规范检查」skill（[SKILL-table.md](SKILL-table.md)）。如需检查字段是否与团队标准字段库绑定，请使用配套的「数据治理-标准字段绑定检查」skill（[SKILL-standard.md](SKILL-standard.md)）。
 
 ---
 

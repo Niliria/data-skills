@@ -57,7 +57,7 @@ description: >
 
 | 规则 ID | 规则描述 | 检测方法 | 严重级别 |
 |--------|---------|---------|---------|
-| SEC-01 | SQL 中不允许硬编码明文密码、AK/SK、Token 等敏感凭证 | 文本匹配 `password=`、`access_key=`、`secret=`、`token=` 后面跟字符串常量 | 高 |
+| SEC-01 | SQL 中不允许硬编码明文密码、AK/SK、Token 等敏感凭证 | 文本匹配 `password`、`access_key`、`secret`、`token` 等关键词后跟字符串常量（等号两侧空格不限） | 高 |
 | SEC-02 | 生产 DML（`DELETE`、`UPDATE`、`TRUNCATE`）必须包含分区过滤条件 | 解析 WHERE 条件是否包含分区字段。优先从 `references/sql-partition-fields.csv` 中读取分区字段名列表；如文件不存在则按内置默认 `dt`、`partition_date`、`p_date`、`month_id`、`day_id` 推断。非标命名且未声明时，检测结果标注"⚠️ 分区字段名未确认，可能存在漏检，请人工复核" | 高 |
 
 ---

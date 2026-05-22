@@ -329,7 +329,7 @@ CREATE TABLE ods_uf_client (
 )
 COMMENT 'ods uf client';
 
-CREATE TABLE dwd_crdt_agr_quota_chg_i (
+CREATE TABLE dwd_crdt_agr_i_quota_chg (
   id          BIGINT         COMMENT '主键',
   client_id   STRING         COMMENT '客户ID',
   chg_amt     DECIMAL(18,2)  COMMENT '变更金额，单位：元'
@@ -347,7 +347,7 @@ COMMENT '信贷业务协议层-客户授信额度变更明细增量表';
 |------|--------|---------|---------|---------|---------|---------|---------|
 | ods_uf_client | ods uf client | 表级问题 | 高 | S-ODS-01 | ODS层表名缺少数据库名段，当前仅两段 `uf_client`，应为三段 | 补充数据库名，改为 `ods_uf_{数据库名}_client` | ODS层须保留完整溯源信息 |
 | ods_uf_client | ods uf client | 表级问题 | 高 | T-03 | 表注释 `ods uf client` 与表名直接转写，无实际业务含义 | 改为 `贴源层-UF系统客户基础信息表` | 有效注释应描述业务对象 |
-| dwd_crdt_agr_quota_chg_i | 信贷业务协议层-客户授信额度变更明细增量表 | 表级问题 | 中 | S-DWD-02 | 增量标识 `i` 出现在表名中间位置，应放在最末段 | 改为 `dwd_crdt_agr_quota_chg_i` 或将 `_i` 移至末尾 | 增量全量标识应固定放在表名末段 |
+| dwd_crdt_agr_i_quota_chg | 信贷业务协议层-客户授信额度变更明细增量表 | 表级问题 | 中 | S-DWD-02 | 增量标识 `_i` 出现在表名中间（`dwd_crdt_agr_i_quota_chg`），应放在最末段 | 改为 `dwd_crdt_agr_quota_chg_i`，将 `_i` 移至末尾 | 增量全量标识应固定放在表名末段 |
 
 **「检查摘要」sheet：**
 
@@ -379,7 +379,7 @@ COMMENT '信贷业务协议层-客户授信额度变更明细增量表';
 | 表名 | 所属层 | 问题数 | 高 | 中 | 低 |
 |------|--------|--------|----|----|----|
 | ods_uf_client | ods | 2 | 2 | 0 | 0 |
-| dwd_crdt_agr_quota_chg_i | dwd | 1 | 0 | 1 | 0 |
+| dwd_crdt_agr_i_quota_chg | dwd | 1 | 0 | 1 | 0 |
 
 按类型统计（Top 5 高频问题规则）：
 

@@ -1,0 +1,66 @@
+# 数据质量检查 · 连接配置模板
+# 使用时：复制此文件，填入你自己的数仓连接信息和自定义规则，在检查时一并上传。
+
+# ============================
+# 数仓连接信息（必须填写）
+# ============================
+host: 10.0.0.1          # HiveServer2 地址
+port: 10000              # HiveServer2 端口
+database: dwd_crdt       # 目标数据库名
+username: hive_user      # 连接用户名
+password: your_password  # 连接密码
+
+# 可选参数
+auth_mechanism: LDAP     # 认证机制：LDAP / PLAIN / NOSASL（默认 LDAP）
+partition_value: ""      # 检查的目标分区值，留空则自动检测最新分区
+
+# ============================
+# 自定义业务规则（可选）
+# 如果你有自己的业务勾稽或特殊检查，在这里添加。
+# ============================
+custom_rules:
+  # 示例 1：账户余额与明细之和比对
+  - rule_id: DQ-CUST-001
+    rule_name: 账户余额与明细之和差异检查
+    target_table: dwd_crdt_account
+    severity: 高
+    sql: |
+      SELECT
+        a.account_id,
+        a.balance AS declared_balance,
+        COALESCE(SUM(d.amount), 0) AS detail_balance,
+        ABS(a.balance - COALESCE(SUM(d.amount), 0)) AS diff
+      FROM dwd_crdt_account a
+      LEFT JOIN dwd_crdt_txn_detail d
+        ON a.account_id = d.account_id
+        AND d.dt = '${bizdate}'
+      WHERE a.dt = '${bizdate}'
+      GROUP BY a.account_id, a.balance
+      HAVING ABS(a.balance - COALESCE(SUM(d.amount), 0)) > 0.01
+    threshold: 0
+
+  # 示例 2：交易金额极值告警
+  - rule_id: DQ-CUST-002
+    rule_name: 单笔交易金额超过 1 亿
+    target_table: dwd_crdt_txn
+    severity: 中
+    sql: |
+      SELECT COUNT(*) AS error_count
+      FROM dwd_crdt_txn
+      WHERE dt = '${bizdate}'
+        AND trade_amt > 100000000
+    threshold: 0
+
+  # 示例 3：分区数据缺失检查（自定义）
+  - rule_id: DQ-CUST-003
+    rule_name: 近 7 天分区完整性
+    target_table: dws_crdt_daily_summary
+    severity: 高
+    sql: |
+      SELECT
+        COUNT(DISTINCT dt) AS actual_days,
+        7 AS expected_days,
+        7 - COUNT(DISTINCT dt) AS missing_days
+      FROM dws_crdt_daily_summary
+      WHERE dt >= date_sub(CURRENT_DATE, 7)
+    threshold: 0

@@ -1,9 +1,9 @@
 ---
 name: data-governance
 description: >
-  Hive 数仓数据治理综合检查工具，覆盖表级 DDL 规范、字段级 DDL 规范、标准字段绑定、SQL 代码规范、血缘健康检查五个维度。
+  Hive 数仓数据治理综合检查工具，覆盖表级 DDL 规范、字段级 DDL 规范、标准字段绑定、SQL 代码规范、血缘健康检查、数据质量规范六个维度。
   当用户上传或粘贴 DDL / SQL 语句，或提到"数据治理"、"数仓规范"、"DDL 审查"、"建表检查"、"SQL检查"、
-  "血缘检查"、"标准字段绑定"等相关诉求时，自动根据输入内容类型路由到对应子 skill 执行检查。
+  "血缘检查"、"标准字段绑定"、"数据质量"、"DQ 检查"等相关诉求时，自动根据输入内容类型路由到对应子 skill 执行检查。
 ---
 
 # 数据治理 · DDL/SQL/血缘规范检查
@@ -18,12 +18,14 @@ Data-Governance/
 │   ├── SKILL-field.md          #   字段级 DDL 规范检查
 │   ├── SKILL-standard.md       #   标准字段绑定检查
 │   ├── SKILL-sql.md            #   SQL 代码规范检查
-│   └── SKILL-lineage.md        #   血缘健康检查
+│   ├── SKILL-lineage.md        #   血缘健康检查
+│   └── SKILL-dq.md             #   数据质量规范检查
 ├── references/                 # 参考文件模板（仅作为格式参考，不直接使用）
 │   ├── table-business-domains_template.csv  # 表级检查：业务板块字典模板
 │   ├── sql-partition-fields_template.csv    # SQL检查：分区字段名清单模板
 │   ├── standard_fields_template.csv         # 标准字段库模板
-│   └── exempt_fields_template.csv           # 豁免字段库模板
+│   ├── exempt_fields_template.csv           # 豁免字段库模板
+│   └── dq_config_template.yaml              # 数据质量检查：连接配置 + 自定义规则模板
 └── examples/                   # 输入示例文件
     ├── sample_ddl.sql                      # DDL 示例（含表级/字段级问题）
     ├── sample_sql.sql                      # SQL 示例（含代码规范/血缘问题）
@@ -46,7 +48,7 @@ Data-Governance/
 ## 概述
 
 本 skill 是数据治理规范检查的 **主入口**，根据用户的具体诉求自动路由到对应的子 skill。
-如果用户没有明确指定检查维度，默认依次执行全部五个子 skill，最终汇总结果。
+如果用户没有明确指定检查维度，默认依次执行全部六个子 skill，最终汇总结果。
 
 ### 子 skill 清单
 
@@ -57,6 +59,7 @@ Data-Governance/
 | 标准字段绑定检查 | [sub-skills/SKILL-standard.md](sub-skills/SKILL-standard.md) | 基于标准字段库检查字段绑定、类型一致性、注释一致性 |
 | SQL 代码规范检查 | [sub-skills/SKILL-sql.md](sub-skills/SKILL-sql.md) | 检查 SQL 安全合规、性能优化、代码规范性 |
 | 血缘健康检查 | [sub-skills/SKILL-lineage.md](sub-skills/SKILL-lineage.md) | 检查表间依赖关系、越层依赖、血缘覆盖率、链路复杂度 |
+| 数据质量规范检查 | [sub-skills/SKILL-dq.md](sub-skills/SKILL-dq.md) | 基于业务类型推断质量规则，连接数仓执行检查，生成质量报告 |
 
 ### 字段级检查的分流说明
 
@@ -82,6 +85,7 @@ SKILL-field.md 和 SKILL-standard.md 都涉及字段检查，但依据不同：
 | `sql-partition-fields.csv`（分区字段清单） | SKILL-sql | 使用内置默认列表：`dt`、`partition_date`、`p_date`、`month_id`、`day_id` |
 | 标准字段库 CSV | SKILL-standard | 不执行标准绑定检查，回退 SKILL-field.md（通用规范检查） |
 | 豁免字段库 CSV | SKILL-standard | 使用内置豁免清单：`create_time`、`insert_time`、`update_time` 等 9 个字段 |
+| `dq_config.yaml`（连接配置 + 自定义规则） | SKILL-dq | 不提供连接配置则无法执行；不提供自定义规则则仅使用内置规则 |
 
 > `references/` 目录中的文件为格式模板（文件名带 `_template` 后缀）。使用时复制模板文件，填入自己的数据后，在检查时一并上传。skill 不会直接使用模板文件中的内容。
 
@@ -103,6 +107,7 @@ SKILL-field.md 和 SKILL-standard.md 都涉及字段检查，但依据不同：
 | 同时包含 DDL 和 SQL + 标准字段库文件 | 表级检查 + 标准字段绑定检查 + SQL 检查 + 血缘检查 |
 | 同时包含 DDL 和 SQL（无标准字段库） | 表级检查 + 字段级检查 + SQL 检查 + 血缘检查 |
 | 无法识别内容类型 | 全量执行（缺标准字段库则跳过标准绑定） |
+| DDL/SQL + 数仓连接配置 | 表级 + 字段级 + SQL + 血缘 + 数据质量（未提供连接配置时数据质量自动跳过） |
 
 ### Step B：应用用户排除规则
 
@@ -117,12 +122,14 @@ SKILL-field.md 和 SKILL-standard.md 都涉及字段检查，但依据不同：
 | "只看血缘"、"表依赖"、"链路问题" | 仅执行血缘检查 |
 | "不要查表级"、"跳过命名检查" | 从默认结果中排除表级 + 字段级 |
 | "不查 SQL"、"跳过代码审查" | 从默认结果中排除 SQL + 血缘 |
+| "只看数据质量"、"DQ 检查"、"数据质量"、"空值检查" | 仅执行数据质量检查 |
+| "不查数据质量"、"跳过质量检查" | 从默认结果中排除数据质量 |
 
 排除规则优先于内容推断。用户同时提到多个维度的诉求时，取并集执行。
 
 ### Step C：全量执行兜底
 
-以下情况执行全部五个子 skill：
+以下情况执行全部六个子 skill：
 - 用户没有明确指定检查维度（如"帮我看看这个"、"审查一下"、"检查下"）
 - 用户提到宽泛的关键词（如"数据治理"、"数仓规范"、"DDL 审查"、"建表语句检查"）
 - 输入内容类型无法判断
@@ -156,13 +163,14 @@ SKILL-field.md 和 SKILL-standard.md 都涉及字段检查，但依据不同：
   - 标准字段绑定检查还需要标准字段库文件，缺则跳过并注明原因
 - SQL 检查：需要 SQL 内容
 - 血缘检查：需要 SQL 内容（含 INSERT INTO / SELECT 的语句）
+- 数据质量检查：需要 DDL 内容 + 数仓连接配置（host、port、database、用户名、密码），未提供连接配置时自动跳过
 
 ### Step 4：执行子 skill
 
 对每个有对应输入的子 skill，依次读取其文件，按照其定义的规则库和工作流执行检查。
 每个子 skill 独立执行，互不影响。
 
-执行顺序：表级 → 字段级 → 标准字段绑定 → SQL → 血缘。
+执行顺序：表级 → 字段级 → 标准字段绑定 → SQL → 血缘 → 数据质量。
 
 ### Step 5：汇总结果（仅全量执行时）
 
@@ -186,6 +194,7 @@ SKILL-field.md 和 SKILL-standard.md 都涉及字段检查，但依据不同：
 | 标准绑定 | X | X | X | X | 通过/需整改/跳过 |
 | SQL 规范 | X | X | X | X | 通过/需整改 |
 | 血缘健康 | X | X | X | X | 通过/需整改 |
+| 数据质量 | X | X | X | X | 通过/需整改/跳过 |
 
 **Top 5 高频问题**
 | 规则 ID | 所属专项 | 描述 | 触发次数 |
@@ -209,6 +218,7 @@ SKILL-field.md 和 SKILL-standard.md 都涉及字段检查，但依据不同：
 | 标准字段绑定 | 标准绑定 |
 | SQL 检查 | SQL规范 |
 | 血缘检查 | 血缘健康 |
+| 数据质量检查 | 数据质量规范 |
 
 每个 sheet 页的结构：
 参考具体子skill输出内容

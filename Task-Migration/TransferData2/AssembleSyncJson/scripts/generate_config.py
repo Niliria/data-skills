@@ -25,11 +25,22 @@ from datetime import datetime
 from typing import Dict, List, Any, Optional, Tuple
 
 # 输入文件路径
-INPUT_DIR = '/mnt/c/Users/67461/Desktop/sync_model/model'
-DATA_SOURCE_FILE = os.path.join(INPUT_DIR, 'dataSource_info.xlsx')
-TASK_INFO_FILE = os.path.join(INPUT_DIR, 'task_info.xlsx')
-TASK_SCHEDULE_FILE = os.path.join(INPUT_DIR, 'taskSchedule_info.xlsx')
-SCHEDULE_TEMPLATE_FILE = os.path.join(INPUT_DIR, 'schedule_info.json')
+LOCAL_INPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '..', '输入文件')
+PUBLIC_INFO_FILE = os.path.join(LOCAL_INPUT_DIR, 'public_info.xlsx')
+
+LOCAL_TASK_INFO_FILE = os.path.join(LOCAL_INPUT_DIR, 'task_info.xlsx')
+
+REMOTE_INPUT_DIR = '/mnt/c/Users/67461/Desktop/sync_model/model'
+LOCAL_TASK_INFO_REMOTE = os.path.join(REMOTE_INPUT_DIR, 'task_info.xlsx')
+# 优先使用 输入文件/ 下的本地副本，不存在则回退到远程路径
+TASK_INFO_FILE = LOCAL_TASK_INFO_FILE if os.path.exists(LOCAL_TASK_INFO_FILE) else LOCAL_TASK_INFO_REMOTE
+DATA_SOURCE_FILE = os.path.join(REMOTE_INPUT_DIR, 'dataSource_info.xlsx')
+TASK_SCHEDULE_FILE = os.path.join(REMOTE_INPUT_DIR, 'taskSchedule_info.xlsx')
+SCHEDULE_TEMPLATE_FILE = os.path.join(REMOTE_INPUT_DIR, 'schedule_info.json')
+
+# 参考文件路径
+REFERENCES_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'references')
+TASK_TYPE_FILE = os.path.join(REFERENCES_DIR, 'task_type.xlsx')
 
 # 输出目录
 OUTPUT_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'resoult')
@@ -142,6 +153,36 @@ class ExcelReader:
         return {row[0]: row[1] if len(row) > 1 else '' for row in data}
 
 
+class PublicInfoConfig:
+    """公共信息配置——从 public_info.xlsx 读取全局参数，动态注入 JSON"""
+    
+    def __init__(self):
+        self._data: Dict[str, str] = {}
+    
+    def load_from_excel(self, filepath: str):
+        """从 public_info.xlsx 读取 key-value 对（第一列 key，第二列 value）"""
+        if not os.path.exists(filepath):
+            print(f"  Warning: 公共信息文件不存在：{filepath}")
+            return
+        
+        sheet_names = ExcelReader.get_sheet_names(filepath)
+        for sheet_name in sheet_names:
+            data = ExcelReader.read_sheet_data(filepath, sheet_name)
+            for row in data:
+                if len(row) >= 2 and row[0]:
+                    self._data[row[0]] = row[1]
+        
+        print(f"  加载公共信息：{len(self._data)} 项 — {list(self._data.keys())}")
+    
+    def get(self, key: str, default: Any = None) -> str:
+        """获取指定 key 的值"""
+        return self._data.get(key, default)
+    
+    def to_dict(self) -> Dict[str, str]:
+        """返回所有 key-value 的字典"""
+        return dict(self._data)
+
+
 class DataSourceConfig:
     """数据源配置管理"""
     
@@ -216,56 +257,99 @@ class TaskInfo:
                 continue
             
             # Standard data sync task sheet
+            # 检测新旧格式：新格式有 "源名称" 和 "目标名称" 列（11列），旧格式为9列
+            is_new_format = ('源名称' in headers) if headers else False
             rows = data[1:] if len(data) > 1 else []
             
             fields = []
             partition_field = None
             source_table = None
+            source_name = None
             source_type = None
             target_table = None
+            target_name = None
             target_type = None
             
             for row in rows:
                 if row[0] == '分区字段':
-                    partition_field = {
-                        'name': row[3] if len(row) > 3 else 'pt',
-                        'type': row[4] if len(row) > 4 else 'string',
-                        'source_table': row[1] if len(row) > 1 else '',
-                        'target_table': row[2] if len(row) > 2 else ''
-                    }
-                    if not source_type and len(row) > 1:
-                        source_type = row[1] if len(row) > 1 else ''
-                    if not target_type and len(row) > 2:
-                        target_type = row[2] if len(row) > 2 else ''
+                    if is_new_format:
+                        # 新格式分区行: ['分区字段', 'zy_test_HADOOP', 'hdfs', 'students', 'pt', 'string']
+                        # col 1: 目标数据源名称, col 2: 类型, col 3: 表名, col 4: 分区字段名, col 5: 分区字段类型
+                        partition_field = {
+                            'name': row[4] if len(row) > 4 else 'pt',
+                            'type': row[5] if len(row) > 5 else 'string',
+                            'source_table': row[3] if len(row) > 3 else '',
+                            'target_table': row[3] if len(row) > 3 else ''
+                        }
+                        if not target_name and len(row) > 1 and row[1] != '':
+                            target_name = row[1]
+                        if not target_type and len(row) > 2:
+                            target_type = row[2]
+                    else:
+                        # 旧格式分区行: ['分区字段', 'students_zwq', 'hdfs', 'pt', 'string']
+                        # col 1: 表名, col 2: 类型, col 3: 分区字段名, col 4: 分区字段类型
+                        partition_field = {
+                            'name': row[3] if len(row) > 3 else 'pt',
+                            'type': row[4] if len(row) > 4 else 'string',
+                            'source_table': row[1] if len(row) > 1 else '',
+                            'target_table': row[1] if len(row) > 1 else ''
+                        }
+                        if not target_type and len(row) > 2:
+                            target_type = row[2]
                     continue
                 
-                field = {
-                    'source_table': row[0] if len(row) > 0 else '',
-                    'source_type': row[1] if len(row) > 1 else '',
-                    'source_field': row[2] if len(row) > 2 else None,
-                    'source_field_type': row[3] if len(row) > 3 else '',
-                    'is_mapped': row[4] if len(row) > 4 else '是',
-                    'target_table': row[5] if len(row) > 5 else '',
-                    'target_type': row[6] if len(row) > 6 else '',
-                    'target_field': row[7] if len(row) > 7 else None,
-                    'target_field_type': row[8] if len(row) > 8 else ''
-                }
+                if is_new_format:
+                    # 新格式: 源名称(0), 源表类型(1), 源表表名(2), 源表字段(3), 源表字段类型(4), 是否映射(5),
+                    #         目标名称(6), 目标表类型(7), 目标表表名(8), 目标表字段(9), 目标表字段类型(10)
+                    field = {
+                        'source_name': row[0] if len(row) > 0 else '',
+                        'source_type': row[1] if len(row) > 1 else '',
+                        'source_table': row[2] if len(row) > 2 else '',
+                        'source_field': row[3] if len(row) > 3 else None,
+                        'source_field_type': row[4] if len(row) > 4 else '',
+                        'is_mapped': row[5] if len(row) > 5 else '是',
+                        'target_name': row[6] if len(row) > 6 else '',
+                        'target_type': row[7] if len(row) > 7 else '',
+                        'target_table': row[8] if len(row) > 8 else '',
+                        'target_field': row[9] if len(row) > 9 else None,
+                        'target_field_type': row[10] if len(row) > 10 else ''
+                    }
+                else:
+                    # 旧格式: 源表表名(0), 源表类型(1), 源表字段(2), 源表字段类型(3), 是否映射(4),
+                    #         目标表表名(5), 目标表类型(6), 目标表字段(7), 目标表字段类型(8)
+                    field = {
+                        'source_name': '',
+                        'source_type': row[1] if len(row) > 1 else '',
+                        'source_table': row[0] if len(row) > 0 else '',
+                        'source_field': row[2] if len(row) > 2 else None,
+                        'source_field_type': row[3] if len(row) > 3 else '',
+                        'is_mapped': row[4] if len(row) > 4 else '是',
+                        'target_name': '',
+                        'target_type': row[6] if len(row) > 6 else '',
+                        'target_table': row[5] if len(row) > 5 else '',
+                        'target_field': row[7] if len(row) > 7 else None,
+                        'target_field_type': row[8] if len(row) > 8 else ''
+                    }
                 fields.append(field)
                 
                 if not source_table and field['source_table']:
                     source_table = field['source_table']
                     source_type = field['source_type']
+                    source_name = field.get('source_name', '')
                 if not target_table and field['target_table']:
                     target_table = field['target_table']
                     target_type = field['target_type']
+                    target_name = field.get('target_name', '')
             
             self.tasks[sheet_name] = {
                 'fields': fields,
                 'partition': partition_field,
                 'source_table': source_table,
                 'source_type': source_type,
+                'source_name': source_name or '',
                 'target_table': target_table,
-                'target_type': target_type
+                'target_type': target_type,
+                'target_name': target_name or ''
             }
     
     def get_sql_content(self, task_name: str) -> str:
@@ -431,10 +515,69 @@ class AssembleSyncJson:
         self.data_source_config = DataSourceConfig()
         self.task_info = TaskInfo()
         self.task_schedule = TaskScheduleConfig()
-        self.default_config = DEFAULT_CONFIG.copy()
+        self.public_info = PublicInfoConfig()
+        # 合并：默认配置为基础，public_info.xlsx 中的同名参数优先覆盖
+        self.config = DEFAULT_CONFIG.copy()
+        self._task_type_mapping: Dict[str, str] = {}  # description -> task type ID
+    
+    def load_task_type_mapping(self):
+        """
+        从 references/task_type.xlsx 读取任务类型映射
+        返回: {描述: 任务类型ID} 字典
+        """
+        if not os.path.exists(TASK_TYPE_FILE):
+            print(f"  Warning: 找不到任务类型文件 {TASK_TYPE_FILE}")
+            return
+        
+        sheet_names = ExcelReader.get_sheet_names(TASK_TYPE_FILE)
+        if not sheet_names:
+            return
+        
+        data = ExcelReader.read_sheet_data(TASK_TYPE_FILE, sheet_names[0])
+        if not data or len(data) < 2:
+            return
+        
+        # 列：任务类型 ID | 描述
+        for row in data[1:]:
+            if len(row) >= 2:
+                type_id = row[0].strip()
+                description = row[1].strip()
+                if type_id and description:
+                    self._task_type_mapping[description] = type_id
+        
+        # 添加中文别名
+        aliases = {'虚节点': 'VIRTUAL'}
+        for cn, en in aliases.items():
+            if en in self._task_type_mapping and cn not in self._task_type_mapping:
+                self._task_type_mapping[cn] = self._task_type_mapping[en]
+        
+        print(f"  加载任务类型映射：{len(self._task_type_mapping)} 条")
+    
+    def get_task_type_id(self, task_type_desc: str) -> str:
+        """
+        根据任务类型描述获取任务类型 ID
+        
+        Args:
+            task_type_desc: 任务类型描述（如 '数据同步', '虚节点', 'SparkSql'）
+        
+        Returns:
+            任务类型 ID（如 '2', '-1', '0'）
+        """
+        if self._task_type_mapping:
+            return self._task_type_mapping.get(task_type_desc, '2')
+        # 回退到硬编码
+        if task_type_desc in ['虚节点']:
+            return '-1'
+        elif task_type_desc in ['数据同步']:
+            return '2'
+        return '0'
     
     def load_all(self):
         """加载所有输入文件"""
+        print(f"加载公共信息：{PUBLIC_INFO_FILE}")
+        self.public_info.load_from_excel(PUBLIC_INFO_FILE)
+        self.config.update(self.public_info.to_dict())  # public_info 的参数覆盖默认值
+        
         print(f"加载数据源配置：{DATA_SOURCE_FILE}")
         self.data_source_config.load_from_excel(DATA_SOURCE_FILE)
         print(f"  找到 {len(self.data_source_config.sources)} 个数据源")
@@ -449,6 +592,9 @@ class AssembleSyncJson:
         
         print(f"加载调度模板：{SCHEDULE_TEMPLATE_FILE}")
         self.task_schedule.load_schedule_templates(SCHEDULE_TEMPLATE_FILE)
+        
+        print(f"加载任务类型映射：{TASK_TYPE_FILE}")
+        self.load_task_type_mapping()
     
     def map_mysql_type_to_hive(self, mysql_type: str) -> str:
         """MySQL 类型映射到 Hive 类型"""
@@ -497,6 +643,8 @@ class AssembleSyncJson:
         source_table = task_data.get('source_table', 'unknown')
         source_type_str = task_data.get('source_type', 'mysql')
         
+        source_type_str = source_config.get('type', task_data.get('source_type', 'mysql'))
+        
         source_id = int(source_config['sourceIds'])
         type_type = int(source_config['dataSourceType'])
         
@@ -532,8 +680,8 @@ class AssembleSyncJson:
         
         partition_field = task_data.get('partition')
         if partition_field and source_type_str.lower() in ['hdfs', 'hive']:
-            source_type_config['partition'] = f"{partition_field['name']}={self.default_config['partition_value']}"
-            source_type_config['writeMode'] = self.default_config['writeMode']
+            source_type_config['partition'] = f"{partition_field['name']}={self.config['partition_value']}"
+            source_type_config['writeMode'] = self.config['writeMode']
         
         source_map = {
             'sourceId': source_id,
@@ -559,7 +707,7 @@ class AssembleSyncJson:
         """构建 targetMap 配置"""
         fields = task_data.get('fields', [])
         target_table = task_data.get('target_table', 'unknown')
-        target_type_str = task_data.get('target_type', 'hdfs')
+        target_type_str = target_config.get('type', task_data.get('target_type', 'hdfs'))
         partition_field = task_data.get('partition')
         
         target_id = int(target_config['sourceIds'])
@@ -598,8 +746,8 @@ class AssembleSyncJson:
         }
         
         if partition_field and target_type_str.lower() in ['hdfs', 'hive']:
-            target_type_config['partition'] = f"{partition_field['name']}={self.default_config['partition_value']}"
-            target_type_config['writeMode'] = self.default_config['writeMode']
+            target_type_config['partition'] = f"{partition_field['name']}={self.config['partition_value']}"
+            target_type_config['writeMode'] = self.config['writeMode']
         
         target_map = {
             'sourceId': target_id,
@@ -663,16 +811,26 @@ class AssembleSyncJson:
     
     def _build_parser_config(self, task_name: str, task_data: Dict[str, Any]) -> Dict[str, Any]:
         """构建 parser 配置"""
+        source_name = task_data.get('source_name', '')
+        target_name = task_data.get('target_name', '')
         source_type_str = task_data.get('source_type', 'mysql').lower()
         target_type_str = task_data.get('target_type', 'hdfs').lower()
         
-        source_config = self.data_source_config.get_source_by_type(source_type_str)
-        target_config = self.data_source_config.get_source_by_type(target_type_str)
+        # 优先使用源名称/目标名称匹配 dataSource_info 的 sheet 页名称（dataSourceName）
+        if source_name:
+            source_config = self.data_source_config.get_source_by_name(source_name)
+        else:
+            source_config = self.data_source_config.get_source_by_type(source_type_str)
+        
+        if target_name:
+            target_config = self.data_source_config.get_source_by_name(target_name)
+        else:
+            target_config = self.data_source_config.get_source_by_type(target_type_str)
         
         if not source_config:
-            raise ValueError(f"任务 {task_name}: 找不到源数据源配置（类型：{source_type_str}）")
+            raise ValueError(f"任务 {task_name}: 找不到源数据源配置（名称：{source_name}，类型：{source_type_str}）")
         if not target_config:
-            raise ValueError(f"任务 {task_name}: 找不到目标数据源配置（类型：{target_type_str}）")
+            raise ValueError(f"任务 {task_name}: 找不到目标数据源配置（名称：{target_name}，类型：{target_type_str}）")
         
         source_map = self._build_source_map(task_name, task_data, source_config)
         target_map = self._build_target_map(task_name, task_data, target_config)
@@ -698,16 +856,26 @@ class AssembleSyncJson:
     def _build_job_config(self, task_name: str, task_data: Dict[str, Any],
                          parser_config: Dict[str, Any]) -> Dict[str, Any]:
         """构建 job 配置"""
+        source_name = task_data.get('source_name', '')
+        target_name = task_data.get('target_name', '')
         source_type_str = task_data.get('source_type', 'mysql').lower()
         target_type_str = task_data.get('target_type', 'hdfs').lower()
         
-        source_config = self.data_source_config.get_source_by_type(source_type_str)
-        target_config = self.data_source_config.get_source_by_type(target_type_str)
+        # 优先使用源名称/目标名称匹配 dataSource_info 的 sheet 页名称
+        if source_name:
+            source_config = self.data_source_config.get_source_by_name(source_name)
+        else:
+            source_config = self.data_source_config.get_source_by_type(source_type_str)
+        
+        if target_name:
+            target_config = self.data_source_config.get_source_by_name(target_name)
+        else:
+            target_config = self.data_source_config.get_source_by_type(target_type_str)
         
         source_table = task_data.get('source_table', 'unknown')
         target_table = task_data.get('target_table', 'unknown')
         partition_field = task_data.get('partition')
-        partition_value = self.default_config['partition_value']
+        partition_value = self.config['partition_value']
         
         keymap = parser_config.get('keymap', {})
         keymap_source = keymap.get('source', [])
@@ -773,7 +941,7 @@ class AssembleSyncJson:
                             'dtCenterSourceId': target_config['dtCenterSourceId'],
                             'column': writer_columns,
                             'dtCenterSourceIds': [int(target_config['dataSourceType'])],
-                            'writeMode': self.default_config['writeMode'],
+                            'writeMode': self.config['writeMode'],
                             'encoding': 'utf-8',
                             'fullColumnName': [col['key'] for col in keymap_target],
                             'dataSourceInfo': {
@@ -858,9 +1026,9 @@ class AssembleSyncJson:
                 'customOffset': 0,
                 'forwardDirection': 1,
                 'isCurrentProject': True,
-                'projectAlias': self.default_config['projectAlias'],
+                'projectAlias': self.config['projectAlias'],
                 'taskName': 'root',
-                'taskType': -1,
+                'taskType': int(self.get_task_type_id('虚节点')),
                 'upDownRelyType': 0
             }
             task_task_info.append(task_info)
@@ -872,16 +1040,20 @@ class AssembleSyncJson:
                 if not dep_task_name or dep_task_name == '无':
                     continue
                 
-                # 对于非数据同步和非虚节点任务（如 SparkSql），taskType 设为 0
-                dep_task_type = 0 if task_type not in ['虚节点', '数据同步'] else 2
+                # 从 taskSchedule_info.xlsx 获取依赖任务的任务类型描述
+                dep_schedule = self.task_schedule.schedules.get(dep_task_name, {})
+                dep_task_type_desc = dep_schedule.get('task_type', '数据同步')
+                
+                # 从 task_type.xlsx 查询对应的任务类型 ID
+                dep_task_type_id = int(self.get_task_type_id(dep_task_type_desc))
                 
                 task_info = {
                     'customOffset': 0,
                     'forwardDirection': 1,
                     'isCurrentProject': True,
-                    'projectAlias': self.default_config['projectAlias'],
+                    'projectAlias': self.config['projectAlias'],
                     'taskName': dep_task_name,
-                    'taskType': dep_task_type,
+                    'taskType': dep_task_type_id,
                     'upDownRelyType': 0
                 }
                 task_task_info.append(task_info)
@@ -921,11 +1093,11 @@ class AssembleSyncJson:
                 'jobBuildType': 1,
                 'mainClass': '',
                 'name': task_name,
-                'nodePid': self.default_config['nodePid'],
+                'nodePid': int(self.config['nodePid']),
                 'ownerUserId': 1,
                 'ownerUserName': 'admin@dtstack.com',
                 'periodType': 2,
-                'projectId': self.default_config['projectId'],
+                'projectId': int(self.config['projectId']),
                 'projectScheduleStatus': 0,
                 'scheduleConf': schedule_conf_str,
                 'scheduleStatus': 1,
@@ -934,10 +1106,10 @@ class AssembleSyncJson:
                 'taskDesc': '',
                 'taskGroup': 0,
                 'taskId': 0,
-                'taskType': -1,
+                'taskType': int(self.get_task_type_id('虚节点')),
                 'taskParams': '',
-                'tenantId': self.default_config['tenantId'],
-                'yarnResourceName': 'saas'
+                'tenantId': int(self.config['tenantId']),
+                'yarnResourceName': self.config.get('yarnResourceName', 'saas')
             },
             'updateEnvParam': False
         }
@@ -964,12 +1136,8 @@ class AssembleSyncJson:
         # 3. 生成 taskTaskInfo（支持多依赖）
         task_task_info = self._build_task_task_info(task_name, task_type)
         
-        # 确定 taskType 值
-        task_type_value = 0  # SQL 任务默认为 0
-        if 'spark' in task_type.lower():
-            task_type_value = 0
-        elif 'flink' in task_type.lower():
-            task_type_value = 0
+        # 根据任务类型从 task_type.xlsx 查询 taskType 值
+        task_type_value = int(self.get_task_type_id(task_type))
         
         sql_task_config = {
             'taskInfo': {
@@ -990,11 +1158,11 @@ class AssembleSyncJson:
                 'jobBuildType': 1,
                 'mainClass': '',
                 'name': task_name,
-                'nodePid': self.default_config['nodePid'],
+                'nodePid': int(self.config['nodePid']),
                 'ownerUserId': 1,
                 'ownerUserName': 'admin@dtstack.com',
                 'periodType': 2,
-                'projectId': self.default_config['projectId'],
+                'projectId': int(self.config['projectId']),
                 'projectScheduleStatus': 0,
                 'scheduleConf': schedule_conf_str,
                 'scheduleStatus': 1,
@@ -1040,8 +1208,8 @@ class AssembleSyncJson:
 
 ## 开启 spark 推测行为，默认 false
 # spark.speculation=false''',
-                'tenantId': self.default_config['tenantId'],
-                'yarnResourceName': 'saas'
+                'tenantId': int(self.config['tenantId']),
+                'yarnResourceName': self.config.get('yarnResourceName', 'saas')
             },
             'taskTaskInfo': task_task_info,
             'updateEnvParam': False
@@ -1083,11 +1251,11 @@ class AssembleSyncJson:
             'jobBuildType': 1,
             'mainClass': '',
             'name': task_name,
-            'nodePid': self.default_config['nodePid'],
+            'nodePid': int(self.config['nodePid']),
             'ownerUserId': 1,
             'ownerUserName': 'admin@dtstack.com',
             'periodType': 2,
-            'projectId': self.default_config['projectId'],
+            'projectId': int(self.config['projectId']),
             'projectScheduleStatus': 0,
             'scheduleConf': schedule_conf_str,
             'scheduleStatus': 1,
@@ -1097,8 +1265,8 @@ class AssembleSyncJson:
             'taskGroup': 0,
             'taskId': 0,
             'taskType': 2,
-            'tenantId': self.default_config['tenantId'],
-            'yarnResourceName': 'saas',
+            'tenantId': int(self.config['tenantId']),
+            'yarnResourceName': self.config.get('yarnResourceName', 'saas'),
             'taskParams': '''## 任务运行方式：
 ## per_job:单独为任务创建 flink yarn session，适用于低频率，大数据量同步
 ## session：多个任务共用一个 flink yarn session，适用于高频率、小数据量同步，默认 session

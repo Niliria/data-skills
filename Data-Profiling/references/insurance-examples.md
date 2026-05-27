@@ -9,22 +9,48 @@
 ### 1.1 承保板块
 
 ```mermaid
-flowchart LR
-    A[投保] --> B{核保}
-    B -->|通过| C[出单/承保]
-    B -->|拒绝| B1[拒保]
-    B -->|延期| B2[延期承保]
-    C --> D[回执签收]
-    D --> E{犹豫期内?}
-    E -->|是| F[犹豫期退保]
-    E -->|否| G[保全/批改]
-    G --> G1[加保]
-    G --> G2[减保]
-    G --> G3[变更受益人]
-    G --> G4[变更缴费方式]
-    G --> G5[其他变更]
-    F --> H[退保]
-    C --> I[续保]
+flowchart TB
+    subgraph 客户或代理人
+        A[投保]
+        G[保全申请]
+        I[续保]
+    end
+    subgraph 核保部
+        B{核保}
+        B1[拒保]
+        B2[延期承保]
+    end
+    subgraph 承保部
+        C[出单/承保]
+        D[回执签收]
+    end
+    subgraph 客服部
+        E{犹豫期内?}
+        F[犹豫期退保]
+        H[退保]
+    end
+    subgraph 保全部
+        G1[加保]
+        G2[减保]
+        G3[变更受益人]
+        G4[变更缴费方式]
+        G5[其他变更]
+    end
+    A --> B
+    B -->|通过| C
+    B -->|拒绝| B1
+    B -->|延期| B2
+    C --> D
+    D --> E
+    E -->|是| F
+    E -->|否| G
+    G --> G1
+    G --> G2
+    G --> G3
+    G --> G4
+    G --> G5
+    F --> H
+    C --> I
     I --> A
 ```
 
@@ -41,21 +67,51 @@ flowchart LR
 ### 1.2 理赔板块
 
 ```mermaid
-flowchart LR
-    A[报案] --> B{立案}
-    B -->|通过| C[查勘调度]
-    B -->|拒绝| B1[拒立案]
-    C --> D[查勘]
-    D --> E[定损]
-    E --> F[理算]
-    F --> G{核赔}
-    G -->|通过| H[赔付]
-    G -->|拒绝| G1[拒赔]
-    H --> I[结案]
-    I --> J[追偿/代位求偿]
+flowchart TB
+    subgraph 客户
+        A[报案]
+    end
+    subgraph 客服中心
+        B{立案}
+        B1[拒立案]
+    end
+    subgraph 查勘部
+        C[查勘调度]
+        D[查勘]
+        D1[重新查勘]
+    end
+    subgraph 定损部
+        E[定损]
+        E1[补充定损]
+    end
+    subgraph 理算部
+        F[理算]
+    end
+    subgraph 核赔部
+        G{核赔}
+        G1[拒赔]
+    end
+    subgraph 赔付部
+        H[赔付]
+    end
+    subgraph 结案部
+        I[结案]
+        J[追偿/代位求偿]
+    end
+    A --> B
+    B -->|通过| C
+    B -->|拒绝| B1
+    C --> D
+    D --> E
+    D --> D1
+    E --> F
+    E --> E1
+    F --> G
+    G -->|通过| H
+    G -->|拒绝| G1
+    H --> I
+    I --> J
     A --> K[销案]
-    E --> E1[补充定损]
-    D --> D1[重新查勘]
 ```
 
 **涉及典型表：**
@@ -73,17 +129,40 @@ flowchart LR
 ### 1.3 收付费板块
 
 ```mermaid
-flowchart LR
-    A[保费应收] --> B{收费}
-    B -->|成功| C[收费确认]
-    B -->|失败| B1[催缴/追缴]
+flowchart TB
+    subgraph 收付费部
+        A[保费应收]
+        B{收费}
+        C[收费确认]
+    end
+    subgraph 催收部
+        B1[催缴/追缴]
+    end
+    subgraph 佣金部
+        D[佣金计算]
+        E[佣金支付]
+    end
+    subgraph 结算部
+        F[手续费结算]
+    end
+    subgraph 赔付部
+        G[理赔应付]
+        H[赔付支付]
+    end
+    subgraph 退费部
+        I[保费退费]
+        J[退费确认]
+    end
+    A --> B
+    B -->|成功| C
+    B -->|失败| B1
     B1 --> B
-    C --> D[佣金计算]
-    D --> E[佣金支付]
-    C --> F[手续费结算]
-    G[理赔应付] --> H[赔付支付]
-    C --> I[保费退费]
-    I --> J[退费确认]
+    C --> D
+    D --> E
+    C --> F
+    G --> H
+    C --> I
+    I --> J
 ```
 
 **涉及典型表：**
@@ -97,15 +176,32 @@ flowchart LR
 ### 1.4 产品板块
 
 ```mermaid
-flowchart LR
-    A[产品定义] --> B[条款配置]
-    B --> C[费率管理]
-    C --> D{产品审核}
-    D -->|通过| E[产品上架]
-    D -->|拒绝| D1[退回修改]
-    E --> F[产品在售]
-    F --> G[产品停售]
-    F --> H[产品变更]
+flowchart TB
+    subgraph 产品部
+        A[产品定义]
+        B[条款配置]
+        H[产品变更]
+    end
+    subgraph 精算部
+        C[费率管理]
+    end
+    subgraph 审核委员会
+        D{产品审核}
+        D1[退回修改]
+    end
+    subgraph 运营部
+        E[产品上架]
+        F[产品在售]
+        G[产品停售]
+    end
+    A --> B
+    B --> C
+    C --> D
+    D -->|通过| E
+    D -->|拒绝| D1
+    E --> F
+    F --> G
+    F --> H
     H --> F
 ```
 
@@ -120,14 +216,30 @@ flowchart LR
 ### 1.5 客户板块
 
 ```mermaid
-flowchart LR
-    A[客户建档] --> B[证件录入]
-    B --> C[联系方式录入]
-    C --> D[客户信息审核]
-    D --> E[客户生效]
-    E --> F[客户变更]
-    E --> G[客户合并]
-    E --> H[客户关系维护]
+flowchart TB
+    subgraph 客户
+        A[客户建档]
+    end
+    subgraph 客服部
+        B[证件录入]
+        C[联系方式录入]
+        F[客户变更]
+        H[客户关系维护]
+    end
+    subgraph 审核部
+        D[客户信息审核]
+    end
+    subgraph 客户管理部
+        E[客户生效]
+        G[客户合并]
+    end
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    E --> G
+    E --> H
     F --> E
 ```
 
@@ -141,10 +253,27 @@ flowchart LR
 
 ### 1.6 销管板块
 
-```
-[渠道准入] → [代理人招募] → [代理人入职] → [业绩归属] → [考核] → [佣金方案]
-                                                  ↓
-                                            [代理人离职]
+```mermaid
+flowchart TB
+    subgraph 渠道管理部
+        A[渠道准入]
+    end
+    subgraph 人事部
+        B[代理人招募]
+        C[代理人入职]
+        G[代理人离职]
+    end
+    subgraph 销售管理部
+        D[业绩归属]
+        E[考核]
+        F[佣金方案]
+    end
+    A --> B
+    B --> C
+    C --> D
+    D --> E
+    E --> F
+    C --> G
 ```
 
 **涉及典型表：**
@@ -157,20 +286,57 @@ flowchart LR
 
 ### 1.7 再保板块
 
-```
-[合约分保] → [临时分保] → [摊回计算] → [再保账单] → [再保结算]
+```mermaid
+flowchart TB
+    subgraph 再保部
+        A[合约分保]
+        B[临时分保]
+        C[摊回计算]
+        D[再保账单]
+    end
+    subgraph 财务部
+        E[再保结算]
+    end
+    A --> B
+    B --> C
+    C --> D
+    D --> E
 ```
 
 ### 1.8 财务板块
 
-```
-[准备金计提] → [损益核算] → [科目记账] → [监管报表生成]
+```mermaid
+flowchart TB
+    subgraph 财务部
+        A[准备金计提]
+        B[损益核算]
+        C[科目记账]
+    end
+    subgraph 监管报送
+        D[监管报表生成]
+    end
+    A --> B
+    B --> C
+    C --> D
 ```
 
 ### 1.9 机构与人员板块
 
-```
-[机构设立] → [组织架构变更] → [人员岗位管理] → [机构撤销]
+```mermaid
+flowchart TB
+    subgraph 行政部
+        A[机构设立]
+        D[机构撤销]
+    end
+    subgraph 组织发展部
+        B[组织架构变更]
+    end
+    subgraph 人力资源部
+        C[人员岗位管理]
+    end
+    A --> B
+    B --> C
+    C --> D
 ```
 
 ---

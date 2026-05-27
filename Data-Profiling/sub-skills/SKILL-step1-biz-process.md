@@ -12,8 +12,6 @@
 |-------|------|------|------|
 | 表结构 DDL | 必选 | SQL 文本 / .sql 文件 | 所有业务表的 CREATE TABLE 语句 |
 | 采样数据 | 推荐 | CSV / Markdown 表格 | 每表 10-20 条代表性数据 |
-| 业务系统说明 | 可选 | 文本 | 系统名称、功能模块说明 |
-| 行业信息 | 可选 | 文本 | 所属行业，用于匹配参考模板 |
 
 ### 输入样例
 
@@ -54,8 +52,8 @@ CREATE TABLE t_claim_report (
 
 #### 样例 B：采样数据（推荐）
 
-```markdown
-t_policy 采样数据：
+##### t_policy 采样数据
+
 | policy_id | policy_no | customer_id | product_id | agent_id | org_id | total_premium | pay_mode | status | sign_date |
 |-----------|-----------|-------------|------------|----------|--------|---------------|----------|--------|-----------|
 | 1001 | POL2025010001 | 5001 | 2001 | 4001 | 101 | 12000.00 | 1 | 1 | 2025-01-15 |
@@ -65,7 +63,8 @@ t_policy 采样数据：
 | 1005 | POL2025010005 | 5005 | 2004 | 4004 | 101 | 1200.00 | 1 | 2 | 2024-03-01 |
 | 1006 | POL2025010006 | 5006 | 2001 | 4002 | 102 | 15000.00 | 1 | 4 | 2020-01-15 |
 
-t_claim_report 采样数据：
+##### t_claim_report 采样数据
+
 | report_id | report_no | policy_id | customer_id | accident_date | accident_type | status |
 |-----------|-----------|-----------|-------------|---------------|---------------|--------|
 | 2001 | RPT2025010001 | 1001 | 5001 | 2025-02-01 | 2 | 1 |
@@ -73,39 +72,8 @@ t_claim_report 采样数据：
 | 2003 | RPT2025010003 | 1004 | 5004 | 2025-02-10 | 3 | 2 |
 | 2004 | RPT2025010004 | 1006 | 5006 | 2025-02-15 | 1 | 0 |
 | 2005 | RPT2025010005 | 1001 | 5001 | 2025-03-01 | 4 | 3 |
-```
 
 完整采样数据样例见 [examples/sample_data.md](../examples/sample_data.md)
-
-#### 样例 C：业务系统说明（可选）
-
-用户可以用自然语言描述业务系统情况：
-
-```
-我们有以下几个业务系统：
-1. 核心业务系统（CoreSystem）：管理保单、保全、退保等，对应表前缀 t_policy、t_endorsement、t_surrender
-2. 理赔系统（ClaimSystem）：管理报案到结案全流程，对应表前缀 t_claim_*
-3. 收付费系统（PaymentSystem）：管理保费收取和佣金发放，对应表前缀 t_premium_*、t_commission_*
-4. 客户系统（CRM）：客户信息统一管理，对应表前缀 t_customer、t_id_info、t_contact_info
-5. 销管系统（SalesMgmt）：代理人管理和业绩考核，对应表前缀 t_agent、t_performance
-6. 产品系统（ProductCenter）：产品定义和费率管理，对应表前缀 t_product、t_rate_table
-
-其中客户系统是基础系统，其他系统都通过 customer_id 关联客户表。
-```
-
-#### 样例 D：行业信息（可选）
-
-```
-我们是财产保险公司，主要经营车险、企财险、责任险。
-```
-
-或
-
-```
-我们是人寿保险公司，主要经营寿险、健康险、意外险、年金险。
-```
-
-行业信息用于匹配 `references/` 目录下的行业参考模板，提高识别准确率。
 
 ---
 
@@ -113,9 +81,7 @@ t_claim_report 采样数据：
 
 ```
 output/
-├── 01-表结构盘点.md         # 表结构盘点表
-├── 02-业务过程清单.md       # 业务过程清单
-└── 03-业务流程全景图.md     # 各板块 mermaid 流程图
+└── 01-业务过程识别.md       # 表结构盘点 + 业务过程清单 + 业务流程全景图
 ```
 
 ---
@@ -129,28 +95,29 @@ output/
 **操作：**
 
 1. **解析 DDL**：提取每张表的表名、表注释、字段名/类型/注释、主外键、分区字段
+
 2. **初步分类**：
-   - **按系统来源**：表名前缀 / 注释中的系统名称 / 用户提供的系统说明
+   - **按系统来源**：根据表名前缀 / 注释中的系统名称推断
    - **按表角色**：
      - 事实表候选：有明确时间戳 + 业务主键 + 度量字段（如 t_premium_receive）
      - 维度表候选：描述性属性为主 + 主键被其他表引用（如 t_customer）
      - 配置/码值表：数据量小、枚举值为主（如 t_code_config）
      - 日志/流水表：高频插入、时间序列特征明显
+
 3. **标注置信度**：高 / 中 / 低
 4. **标记异常表**：测试表（test_/tmp_）、系统表（sys_）、归档表（_bak/_history）
 
 **产出样例：**
 
-```markdown
-# 01-表结构盘点
+#### 表结构盘点
 
-## 统计概览
+##### 统计概览
 - 总表数：25 张
 - 有效表：23 张（排除 t_code_config 配置表 1 张、t_region 公共维度表 1 张）
 - 置信度分布：高 18 张 / 中 4 张 / 低 1 张
 - 业务板块分布：承保 10 张 / 理赔 8 张 / 收付费 2 张 / 客户 3 张 / 产品 3 张 / 销管 3 张 / 公共 3 张
 
-## 承保板块
+##### 承保板块
 
 | 序号 | 表名 | 表注释 | 表角色 | 主键 | 核心字段 | 置信度 |
 |-----|------|-------|-------|------|---------|-------|
@@ -165,7 +132,7 @@ output/
 | 9 | t_surrender | 退保记录 | 事实表 | surrender_id | policy_id, refund_amount, surrender_reason | 高 |
 | 10 | t_renewal | 续保关系 | 事实表 | renewal_id | old_policy_id, new_policy_id | 高 |
 
-## 理赔板块
+##### 理赔板块
 
 | 序号 | 表名 | 表注释 | 表角色 | 主键 | 核心字段 | 置信度 |
 |-----|------|-------|-------|------|---------|-------|
@@ -178,7 +145,7 @@ output/
 | 17 | t_claim_payment | 赔付记录 | 事实表 | payment_id | register_id, pay_amount, pay_method | 高 |
 | 18 | t_claim_close | 结案记录 | 事实表 | close_id | register_id, final_amount, close_type | 高 |
 
-## 公共维度/配置表（不归入业务板块）
+##### 公共维度/配置表（不归入业务板块）
 
 | 序号 | 表名 | 表注释 | 表角色 | 说明 |
 |-----|------|-------|-------|------|
@@ -188,11 +155,10 @@ output/
 | 4 | t_region | 行政区划表 | 维度表 | 公共维度 |
 | 5 | t_code_config | 码值配置表 | 配置表 | 系统配置 |
 
-## 待确认表
+##### 待确认表
 | 表名 | 表注释 | 置信度 | 疑问 |
 |-----|-------|-------|------|
 | t_busi_log | 业务日志 | 低 ❓ | 不确定属于哪个板块，需确认是操作日志还是业务事件 |
-```
 
 ### Step 2: 业务过程识别
 
@@ -210,10 +176,9 @@ output/
 
 **产出样例：**
 
-```markdown
-# 02-业务过程清单
+#### 业务过程清单
 
-## 承保板块
+##### 承保板块
 
 | 序号 | 业务过程 | 英文名 | 类型 | 涉及表 | 关键时间字段 | 关键度量字段 | 置信度 |
 |-----|---------|-------|------|-------|-------------|-------------|-------|
@@ -225,7 +190,7 @@ output/
 | 6 | 退保 | surrender | 事件 | t_surrender | apply_time, complete_time | refund_amount（退保金额） | 高 |
 | 7 | 续保 | renewal | 事件 | t_renewal | renewal_date | — | 高 |
 
-## 理赔板块
+##### 理赔板块
 
 | 序号 | 业务过程 | 英文名 | 类型 | 涉及表 | 关键时间字段 | 关键度量字段 | 置信度 |
 |-----|---------|-------|------|-------|-------------|-------------|-------|
@@ -238,9 +203,9 @@ output/
 | 14 | 赔付 | claim_payment | 事件 | t_claim_payment | pay_date, create_time | pay_amount（赔付金额） | 高 |
 | 15 | 结案 | claim_close | 事件 | t_claim_close | close_date, create_time | final_amount（最终赔付金额） | 高 |
 
-## 状态流转说明
+##### 状态流转说明
 
-### t_policy 保单状态流转（基于采样数据推断）
+###### t_policy 保单状态流转（基于采样数据推断）
 | 状态值 | 含义 | 可流转至 | 推断依据 |
 |-------|------|---------|---------|
 | 1 | 有效 | 2(失效), 3(退保), 5(理赔终止) | COMMENT 明确列出 |
@@ -249,7 +214,7 @@ output/
 | 4 | 满期 | — | 终态，采样中 policy_id=1006 为满期 |
 | 5 | 理赔终止 | — | 终态 |
 
-### t_claim_report 报案状态流转
+###### t_claim_report 报案状态流转
 | 状态值 | 含义 | 可流转至 | 推断依据 |
 |-------|------|---------|---------|
 | 0 | 待处理 | 1(已立案), 2(拒立案), 3(已销案) | COMMENT 明确列出 |
@@ -257,13 +222,12 @@ output/
 | 2 | 拒立案 | — | 终态 |
 | 3 | 已销案 | — | 终态，采样中 report_id=2005 为已销案 |
 
-### t_surrender 退保状态流转
+###### t_surrender 退保状态流转
 | 状态值 | 含义 | 可流转至 | 推断依据 |
 |-------|------|---------|---------|
 | 0 | 待审核 | 1(已完成), 2(已拒绝) | COMMENT 明确列出 |
 | 1 | 已完成 | — | 终态 |
 | 2 | 已拒绝 | — | 终态 |
-```
 
 ### Step 3: 业务流程草图绘制
 
@@ -272,34 +236,39 @@ output/
 **操作：**
 
 1. 按板块组织业务过程
-2. 用 mermaid flowchart 语法绘制流程
+2. 用 mermaid `flowchart TB` + `subgraph` 语法绘制泳道图，按部门/角色划分泳道
 3. 每个节点旁标注涉及的表名
 4. 不确定的关联用 `❓` 标记
 
 **产出样例：**
 
-```markdown
-# 03-业务流程全景图
+#### 承保板块
 
-## 承保板块
-
-### 流程描述
+##### 流程描述
 客户提交投保申请后，进入核保流程。核保通过则出单承保，保单生效后客户可进行保全/批改操作。
 退保分为犹豫期退保和正常退保。保单到期后可续保，续保本质上是一次新的投保流程。
 
-### 流程图
+##### 流程图
 
 ```mermaid
-flowchart LR
-    A["投保<br/><small>t_proposal<br/>t_proposal_item<br/>t_applicant</small>"]
-    B{"核保<br/><small>t_underwrite</small>"}
-    C["出单/承保<br/><small>t_policy<br/>t_policy_item<br/>t_insured</small>"]
-    D["回执签收<br/><small>t_policy.receipt_date</small>"]
-    E["保全/批改<br/><small>t_endorsement</small>"]
-    F["退保<br/><small>t_surrender</small>"]
-    G["续保<br/><small>t_renewal</small>"]
-    B1["拒保"]
-    B2["延期承保"]
+flowchart TB
+    subgraph 客户或代理人
+        A["投保<br/><small>t_proposal<br/>t_proposal_item<br/>t_applicant</small>"]
+        G["续保<br/><small>t_renewal</small>"]
+    end
+    subgraph 核保部
+        B{"核保<br/><small>t_underwrite</small>"}
+        B1["拒保"]
+        B2["延期承保"]
+    end
+    subgraph 承保部
+        C["出单/承保<br/><small>t_policy<br/>t_policy_item<br/>t_insured</small>"]
+        D["回执签收<br/><small>t_policy.receipt_date</small>"]
+    end
+    subgraph 客服部
+        E["保全/批改<br/><small>t_endorsement</small>"]
+        F["退保<br/><small>t_surrender</small>"]
+    end
 
     A --> B
     B -->|通过| C
@@ -313,7 +282,7 @@ flowchart LR
     G --> A
 ```
 
-### 待确认项 ❓
+##### 待确认项 ❓
 | 序号 | 不确定内容 | 推断依据 | 需确认原因 |
 |-----|----------|---------|-----------|
 | 1 | 回执签收是否为独立流程节点？ | t_policy 表中仅有 receipt_date 字段，无独立表 | 可能只是保单的一个字段更新 |
@@ -322,27 +291,40 @@ flowchart LR
 
 ---
 
-## 理赔板块
+#### 理赔板块
 
-### 流程描述
+##### 流程描述
 出险后客户报案，经立案审查通过后进入查勘、定损、理算流程。核赔通过后执行赔付并结案。
 拒赔和销案为异常终态。
 
-### 流程图
+##### 流程图
 
 ```mermaid
-flowchart LR
-    A["报案<br/><small>t_claim_report</small>"]
-    B{"立案<br/><small>t_claim_register</small>"}
-    C["查勘<br/><small>t_survey</small>"]
-    D["定损<br/><small>t_loss_assessment</small>"]
-    E["理算<br/><small>t_claim_calculation</small>"]
-    F{"核赔<br/><small>t_claim_approval</small>"}
-    G["赔付<br/><small>t_claim_payment</small>"]
-    H["结案<br/><small>t_claim_close</small>"]
-    B1["拒立案"]
-    F1["拒赔"]
-    K["销案<br/><small>t_claim_close<br/>close_type=3</small>"]
+flowchart TB
+    subgraph 客户
+        A["报案<br/><small>t_claim_report</small>"]
+    end
+    subgraph 客服中心
+        B{"立案<br/><small>t_claim_register</small>"}
+        B1["拒立案"]
+    end
+    subgraph 查勘部
+        C["查勘<br/><small>t_survey</small>"]
+    end
+    subgraph 定损部
+        D["定损<br/><small>t_loss_assessment</small>"]
+    end
+    subgraph 理算部
+        E["理算<br/><small>t_claim_calculation</small>"]
+    end
+    subgraph 核赔部
+        F{"核赔<br/><small>t_claim_approval</small>"}
+        F1["拒赔"]
+    end
+    subgraph 赔付部
+        G["赔付<br/><small>t_claim_payment</small>"]
+        H["结案<br/><small>t_claim_close</small>"]
+    end
 
     A --> B
     B -->|通过| C
@@ -353,16 +335,15 @@ flowchart LR
     F -->|通过| G
     F -->|拒绝| F1
     G --> H
-    A --> K
+    A --> K["销案<br/><small>t_claim_close<br/>close_type=3</small>"]
 ```
 
-### 待确认项 ❓
+##### 待确认项 ❓
 | 序号 | 不确定内容 | 推断依据 | 需确认原因 |
 |-----|----------|---------|-----------|
 | 1 | 定损后是否可以补充定损？ | t_loss_assessment 有 status=2（需补充），但未见独立的补充定损表 | 可能在同一张表更新记录 |
 | 2 | 查勘是否必须？是否所有案件都需要查勘？ | 所有理赔流程表都通过 register_id 关联，但查勘表可能为空 | 需确认小额免查勘规则 |
 | 3 | 拒赔后是否可申诉重新核赔？ | 未见申诉相关表或字段 | 可能存在线下流程 |
-```
 
 ---
 
@@ -388,5 +369,4 @@ flowchart LR
 1. **不假设不存在的表或字段**：仅基于用户提供的 DDL 和采样数据推断
 2. **标注推断依据**：每个业务过程的识别都要说明从哪些表/字段推断
 3. **优先用采样数据验证**：表名/字段名不明确时，用采样数据辅助判断
-4. **参考行业模板**：如用户提供了行业信息，参考 `references/` 下的行业模板，但不生搬硬套
-5. **标记所有不确定项**：宁可多标 `❓`，也不给错误结论
+4. **标记所有不确定项**：宁可多标 `❓`，也不给错误结论

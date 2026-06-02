@@ -1,0 +1,54 @@
+表名称，表备注，字段名称，字段类型，字段备注，来源表，来源字段，加工逻辑说明
+dws_trd_user_df，交易域用户日汇总，dt,string，统计日期，global,global，分区字段
+dws_trd_user_df，交易域用户日汇总，user_id,string，用户 ID,dwd_trd_place_order_df,user_id，分组维度
+dws_trd_user_df，交易域用户日汇总，user_name,string，用户名，dim_user,user_name，维度冗余（白名单）
+dws_trd_user_df，交易域用户日汇总，gender,string，性别，dim_user,gender，维度冗余（白名单）
+dws_trd_user_df，交易域用户日汇总，register_channel,string，注册渠道，dim_user,register_channel，维度冗余（白名单）
+dws_trd_user_df，交易域用户日汇总，city_name,string，所在城市，dim_user,city_name，维度冗余（白名单）
+dws_trd_user_df，交易域用户日汇总，order_cnt_sum,bigint，下单订单数，dwd_trd_place_order_df,order_id,COUNT(DISTINCT)
+dws_trd_user_df，交易域用户日汇总，order_amt_full_sum,decimal(16,2)，订单总金额，dwd_trd_place_order_df,total_amount,SUM
+dws_trd_user_df，交易域用户日汇总，pay_amt_sum,decimal(16,2)，实付金额，dwd_trd_place_order_df,pay_amount,SUM
+dws_trd_user_df，交易域用户日汇总，discount_amt_sum,decimal(16,2)，优惠金额，dwd_trd_place_order_df,discount_amount,SUM
+dws_trd_user_df，交易域用户日汇总，payment_cnt_sum,bigint，支付次数，dwd_trd_payment_df,pay_id,COUNT(DISTINCT)
+dws_trd_user_df，交易域用户日汇总，payment_amt_sum,decimal(16,2)，支付金额，dwd_trd_payment_df,pay_amount,SUM
+dws_trd_user_df，交易域用户日汇总，refund_cnt_sum,bigint，退款次数，dwd_trd_refund_df,refund_id,COUNT(DISTINCT)
+dws_trd_user_df，交易域用户日汇总，refund_amt_sum,decimal(16,2)，退款金额，dwd_trd_refund_df,refund_amount,SUM
+dws_trd_sku_df，交易域商品日汇总，dt,string，统计日期，global,global，分区字段
+dws_trd_sku_df，交易域商品日汇总，sku_id,string，商品 SKU ID,dwd_trd_order_detail_df,sku_id，分组维度
+dws_trd_sku_df，交易域商品日汇总，sku_name,string，商品名称，dim_sku,sku_name，维度冗余（白名单）
+dws_trd_sku_df，交易域商品日汇总，category_id,bigint，品类 ID,dim_sku,category_id，维度冗余（白名单）
+dws_trd_sku_df，交易域商品日汇总，category_name,string，品类名称，dim_sku,category_name，维度冗余（白名单）
+dws_trd_sku_df，交易域商品日汇总，shop_id,string，门店 ID,dim_sku,shop_id，维度冗余（白名单）
+dws_trd_sku_df，交易域商品日汇总，order_qty_sum,bigint，销售数量，dwd_trd_order_detail_df,quantity,SUM
+dws_trd_sku_df，交易域商品日汇总，original_amt_sum,decimal(16,2)，原价金额，dwd_trd_order_detail_df,original_amount,SUM
+dws_trd_sku_df，交易域商品日汇总，split_amt_sum,decimal(16,2)，分摊金额，dwd_trd_order_detail_df,split_amount,SUM
+dws_trd_sku_df，交易域商品日汇总，order_cnt_sum,bigint，订单数，dwd_trd_order_detail_df,id,COUNT(DISTINCT)
+dws_trd_shop_df，交易域门店日汇总，dt,string，统计日期，global,global，分区字段
+dws_trd_shop_df，交易域门店日汇总，shop_id,string，门店 ID,dwd_trd_place_order_df,shop_id，分组维度
+dws_trd_shop_df，交易域门店日汇总，shop_name,string，门店名称，dim_shop,shop_name，维度冗余（白名单）
+dws_trd_shop_df，交易域门店日汇总，city_id,bigint，城市 ID,dim_shop,city_id，维度冗余（白名单）
+dws_trd_shop_df，交易域门店日汇总，city_name,string，城市名称，dim_shop,city_name，维度冗余（白名单）
+dws_trd_shop_df，交易域门店日汇总，is_open,tinyint，是否营业，dim_shop,is_open，维度冗余（白名单）
+dws_trd_shop_df，交易域门店日汇总，order_cnt_sum,bigint，下单订单数，dwd_trd_place_order_df,order_id,COUNT(DISTINCT)
+dws_trd_shop_df，交易域门店日汇总，order_amt_full_sum,decimal(16,2)，订单总金额，dwd_trd_place_order_df,total_amount,SUM
+dws_trd_shop_df，交易域门店日汇总，pay_amt_sum,decimal(16,2)，实付金额，dwd_trd_place_order_df,pay_amount,SUM
+dws_trd_shop_df，交易域门店日汇总，refund_cnt_sum,bigint，退款次数，dwd_trd_refund_df,refund_id,COUNT(DISTINCT)
+dws_trd_shop_df，交易域门店日汇总，refund_amt_sum,decimal(16,2)，退款金额，dwd_trd_refund_df,refund_amount,SUM
+dws_inv_shop_sku_df，库存域门店商品日汇总，dt,string，统计日期，global,global，分区字段
+dws_inv_shop_sku_df，库存域门店商品日汇总，shop_id,string，门店 ID,dwd_inv_inventory_snapshot_df,shop_id，分组维度
+dws_inv_shop_sku_df，库存域门店商品日汇总，sku_id,string，商品 SKU ID,dwd_inv_inventory_snapshot_df,sku_id，分组维度
+dws_inv_shop_sku_df，库存域门店商品日汇总，sku_name,string，商品名称，dim_sku,sku_name，维度冗余（白名单）
+dws_inv_shop_sku_df，库存域门店商品日汇总，shop_name,string，门店名称，dim_shop,shop_name，维度冗余（白名单）
+dws_inv_shop_sku_df，库存域门店商品日汇总，stock_num_sum,bigint，库存数量，dwd_inv_inventory_snapshot_df,stock_num,SUM
+dws_inv_shop_sku_df，库存域门店商品日汇总，stock_num_max,bigint，库存最大值，dwd_inv_inventory_snapshot_df,stock_num,MAX
+dws_inv_shop_sku_df，库存域门店商品日汇总，stock_num_min,bigint，库存最小值，dwd_inv_inventory_snapshot_df,stock_num,MIN
+dws_mkt_user_df，营销域用户日汇总，dt,string，统计日期，global,global，分区字段
+dws_mkt_user_df，营销域用户日汇总，user_id,string，用户 ID,dwd_mkt_coupon_usage_df,user_id，分组维度
+dws_mkt_user_df，营销域用户日汇总，user_name,string，用户名，dim_user,user_name，维度冗余（白名单）
+dws_mkt_user_df，营销域用户日汇总，coupon_use_cnt_sum,bigint，优惠券使用次数，dwd_mkt_coupon_usage_df,id,COUNT(DISTINCT)
+dws_mkt_coupon_df，营销域优惠券日汇总，dt,string，统计日期，global,global，分区字段
+dws_mkt_coupon_df，营销域优惠券日汇总，coupon_id,string，优惠券 ID,dwd_mkt_coupon_usage_df,coupon_id，分组维度
+dws_mkt_coupon_df，营销域优惠券日汇总，coupon_name,string，优惠券名称，dim_coupon,coupon_name，维度冗余（白名单）
+dws_mkt_coupon_df，营销域优惠券日汇总，discount_type,tinyint，优惠类型，dim_coupon,discount_type，维度冗余（白名单）
+dws_mkt_coupon_df，营销域优惠券日汇总，coupon_use_cnt_sum,bigint，使用次数，dwd_mkt_coupon_usage_df,id,COUNT(DISTINCT)
+dws_mkt_coupon_df，营销域优惠券日汇总，coupon_use_user_cnt_sum,bigint，使用人数，dwd_mkt_coupon_usage_df,user_id,COUNT(DISTINCT)

@@ -1,0 +1,11 @@
+layer,target_table,depends_on,load_order,description
+DIM,dim_coupon,ods_mall_oltp_coupon_info,1,维度表依赖上游 ODS/DWS 源
+DIM,dim_shop,ods_mall_oltp_shop_info,1,维度表依赖上游 ODS/DWS 源
+DIM,dim_sku,ods_mall_oltp_sku_info,1,维度表依赖上游 ODS/DWS 源
+DIM,dim_user,ods_mall_oltp_user_info,1,维度表依赖上游 ODS/DWS 源
+DWD,dwd_inv_inventory_snapshot_df,ods_mall_oltp_stock_info+dim_coupon+dim_shop+dim_sku+dim_user,2,事实表依赖源事实数据和维度表
+DWD,dwd_mkt_coupon_usage_df,ods_mall_oltp_user_coupon+dim_coupon+dim_shop+dim_sku+dim_user,2,事实表依赖源事实数据和维度表
+DWD,dwd_trd_order_detail_df,ods_mall_oltp_order_item+dim_coupon+dim_shop+dim_sku+dim_user,2,事实表依赖源事实数据和维度表
+DWD,dwd_trd_payment_df,ods_mall_oltp_payment_info+dim_coupon+dim_shop+dim_sku+dim_user,2,事实表依赖源事实数据和维度表
+DWD,dwd_trd_place_order_df,ods_mall_oltp_order_info+dim_coupon+dim_shop+dim_sku+dim_user,2,事实表依赖源事实数据和维度表
+DWD,dwd_trd_refund_df,ods_mall_oltp_refund_info+dim_coupon+dim_shop+dim_sku+dim_user,2,事实表依赖源事实数据和维度表

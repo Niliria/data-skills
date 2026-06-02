@@ -1,0 +1,5 @@
+﻿维度表名,来源ODS表,表角色,关联方式,关联条件,备注
+dim_user,user_info,主表,-,-,
+dim_shop,shop_info,主表,-,-,
+dim_sku,sku_info,主表,-,-,
+dim_coupon,coupon_info,主表,-,-,

@@ -1,0 +1,7 @@
+﻿业务过程中文名称,业务过程英文名称,业务过程描述,主题域编码,主题域中文名称,涉及ODS表,粒度声明,粒度键,事实表类型,类型判定依据,更新时间
+下单,place_order,用户提交订单，生成一笔交易记录,TRD,交易域,order_info,一行一笔订单,order_id,transaction,有明确下单时间(order_time)，事件后行不变，含金额度量,2026-05-12
+订单明细,order_detail,订单中每个商品行项的明细记录,TRD,交易域,order_item,一行一个订单商品行项,id,transaction,随订单事件产生，行不变，含数量和金额度量,2026-05-12
+支付,payment,用户完成订单支付,TRD,交易域,payment_info,一行一笔支付交易,pay_id,transaction,有明确支付时间(pay_time)，事件后行不变，含支付金额度量,2026-05-12
+退款,refund,用户发起退款申请并完成退款,TRD,交易域,refund_info,一行一笔退款记录,refund_id,transaction,有退款时间(refund_time)，事件后行不变，含退款金额度量,2026-05-12
+用券,coupon_use,用户在订单中使用优惠券,MKT,营销域,user_coupon,一行一次优惠券使用记录,id,transaction,有使用时间(use_time)，关联用户/优惠券/订单三个实体，含use_status状态,2026-05-12
+库存快照,stock_snapshot,按周期记录各门店各商品的库存数量,INV,库存域,stock_info,一行一个SKU在一个门店的库存快照,id,periodic_snapshot,无明确事件时间，stock_num为余额类半可加度量，按周期截面记录,2026-05-12

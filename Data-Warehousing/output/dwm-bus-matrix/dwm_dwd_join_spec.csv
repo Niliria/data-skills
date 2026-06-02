@@ -1,0 +1,7 @@
+﻿DWD表名,来源ODS表,表角色,关联方式,关联条件,备注
+dwd_trd_place_order_df,order_info,主表,-,-,
+dwd_trd_order_detail_df,order_item,主表,-,-,
+dwd_trd_payment_df,payment_info,主表,-,-,
+dwd_trd_refund_df,refund_info,主表,-,-,
+dwd_mkt_coupon_use_df,user_coupon,主表,-,-,
+dwd_inv_stock_snapshot_df,stock_info,主表,-,-,

@@ -1,0 +1,87 @@
+模型名,dim_coupon
+中文名,维度表-优惠券维度
+数据来源,ods_mall_oltp_coupon_info
+主题,coupon
+层级,DIM
+说明,"维度表: coupon, SCD Type 1"
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度
+,coupon_id,STRING,coupon业务键,首取,N,Y
+,coupon_name,STRING,优惠券名称,coupon_name,Y,Y
+,discount_type,TINYINT,1满减 2折扣,discount_type,Y,Y
+,min_amount,"DECIMAL(16,2)",最低使用金额,min_amount,Y,Y
+,discount_amount,"DECIMAL(16,2)",优惠金额/折扣率,discount_amount,Y,Y
+,start_time,STRING,生效时间,start_time,Y,Y
+,end_time,STRING,失效时间,end_time,Y,Y
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,
+,pt,STRING,分区日期,ETL,N,
+
+
+模型名,dim_shop
+中文名,维度表-门店维度
+数据来源,ods_mall_oltp_shop_info
+主题,shop
+层级,DIM
+说明,"维度表: shop, SCD Type 1"
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度
+,shop_id,STRING,shop业务键,首取,N,Y
+,shop_name,STRING,门店名称,shop_name,Y,Y
+,city_id,BIGINT,城市ID,city_id,Y,Y
+,city_name,STRING,城市名称,city_name,Y,Y
+,manager_name,STRING,店长,manager_name,Y,Y
+,is_open,TINYINT,是否营业,is_open,Y,Y
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,
+,pt,STRING,分区日期,ETL,N,
+
+
+模型名,dim_sku
+中文名,维度表-商品维度
+数据来源,ods_mall_oltp_sku_info
+主题,sku
+层级,DIM
+说明,"维度表: sku, SCD Type 2"
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度
+,sku_id,STRING,sku业务键,首取,N,Y
+,spu_id,BIGINT,SPU ID,spu_id,Y,Y
+,sku_name,STRING,商品名称,sku_name,Y,Y
+,category_id,BIGINT,��类ID,category_id,Y,Y
+,category_name,STRING,品类名称,category_name,Y,Y
+,shop_id,BIGINT,门店ID,shop_id,Y,Y
+,cost_price,"DECIMAL(16,2)",成本价,cost_price,Y,Y
+,sale_price,"DECIMAL(16,2)",销售价,sale_price,Y,Y
+,is_on_sale,TINYINT,是否上架,is_on_sale,Y,Y
+,begin_date,STRING,生效日期,系统生成,N,
+,end_date,STRING,失效日期,系统生成,Y,
+,is_active,INT,是否当前记录,系统生成,N,
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,
+,pt,STRING,分区日期,ETL,N,
+
+
+模型名,dim_user
+中文名,维度表-用户维度
+数据来源,ods_mall_oltp_user_info
+主题,user
+层级,DIM
+说明,"维度表: user, SCD Type 2"
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度
+,user_id,STRING,user业务键,首取,N,Y
+,user_name,STRING,用户名,user_name,Y,Y
+,gender,STRING,性别 1男 2女,gender,Y,Y
+,phone,STRING,手机号,phone,Y,Y
+,register_time,STRING,注册时间,register_time,Y,Y
+,register_channel,STRING,注册渠道,register_channel,Y,Y
+,city_name,STRING,所在城市,city_name,Y,Y
+,begin_date,STRING,生效日期,系统生成,N,
+,end_date,STRING,失效日期,系统生成,Y,
+,is_active,INT,是否当前记录,系统生成,N,
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,
+,pt,STRING,分区日期,ETL,N,
+
+

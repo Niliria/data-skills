@@ -1,0 +1,127 @@
+模型名,dwd_inv_inventory_snapshot_df
+中文名,事实表-inventory_snapshot
+数据来源,ods_mall_oltp_stock_info
+主题,inv
+层级,DWD
+说明,事实表: inv-inventory_snapshot
+粒度,一行一个门店一个SKU的库存快照
+事实类型,periodic_snapshot
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度,度量
+,sku_id,STRING,inventory_snapshot业务键,首取,N,,
+,sku_sk,BIGINT,关联 dim_sku 的代理键,sku_id,N,Y,
+,shop_sk,BIGINT,关联 dim_shop 的代理键,shop_id,N,Y,
+,stock_num,INT,库存数量,stock_num,N,,Y
+,is_valid,INT,是否有效记录,ETL,N,,
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,,
+,source_system,STRING,来源系统,ETL,N,,
+,pt,STRING,分区日期,ETL,N,,
+
+
+模型名,dwd_mkt_coupon_usage_df
+中文名,事实表-coupon_usage
+数据来源,ods_mall_oltp_user_coupon
+主题,mkt
+层级,DWD
+说明,事实表: mkt-coupon_usage
+粒度,一行一张用户领取的优惠券
+事实类型,factless
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度,度量
+,id,STRING,coupon_usage业务键,首取,N,,
+,user_sk,BIGINT,关联 dim_user 的代理键,user_id,N,Y,
+,coupon_sk,BIGINT,关联 dim_coupon 的代理键,coupon_id,N,Y,
+,is_valid,INT,是否有效记录,ETL,N,,
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,,
+,source_system,STRING,来源系统,ETL,N,,
+,pt,STRING,分区日期,ETL,N,,
+
+
+模型名,dwd_trd_order_detail_df
+中文名,事实表-order_detail
+数据来源,ods_mall_oltp_order_item
+主题,trd
+层级,DWD
+说明,事实表: trd-order_detail
+粒度,一行一笔订单中的一个商品明细行
+事实类型,transaction
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度,度量
+,id,STRING,order_detail业务键,首取,N,,
+,sku_sk,BIGINT,关联 dim_sku 的代理键,sku_id,N,Y,
+,quantity,INT,购买数量,quantity,N,,Y
+,original_amount,"DECIMAL(16,2)",原价金额,original_amount,N,,Y
+,split_amount,"DECIMAL(16,2)",分摊金额,split_amount,N,,Y
+,is_valid,INT,是否有效记录,ETL,N,,
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,,
+,source_system,STRING,来源系统,ETL,N,,
+,pt,STRING,分区日期,ETL,N,,
+
+
+模型名,dwd_trd_payment_df
+中文名,事实表-payment
+数据来源,ods_mall_oltp_payment_info
+主题,trd
+层级,DWD
+说明,事实表: trd-payment
+粒度,一行一笔支付交易
+事实类型,transaction
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度,度量
+,pay_id,STRING,payment业务键,首取,N,,
+,user_sk,BIGINT,关联 dim_user 的代理键,user_id,N,Y,
+,pay_amount,"DECIMAL(16,2)",支付金额,pay_amount,N,,Y
+,is_valid,INT,是否有效记录,ETL,N,,
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,,
+,source_system,STRING,来源系统,ETL,N,,
+,pt,STRING,分区日期,ETL,N,,
+
+
+模型名,dwd_trd_place_order_df
+中文名,事实表-place_order
+数据来源,ods_mall_oltp_order_info
+主题,trd
+层级,DWD
+说明,事实表: trd-place_order
+粒度,一行一笔订单
+事实类型,transaction
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度,度量
+,order_id,STRING,place_order业务键,首取,N,,
+,user_sk,BIGINT,关联 dim_user 的代理键,user_id,N,Y,
+,shop_sk,BIGINT,关联 dim_shop 的代理键,shop_id,N,Y,
+,total_amount,"DECIMAL(16,2)",订单总金额,total_amount,N,,Y
+,pay_amount,"DECIMAL(16,2)",实付金额,pay_amount,N,,Y
+,discount_amount,"DECIMAL(16,2)",优惠金额,discount_amount,N,,Y
+,is_valid,INT,是否有效记录,ETL,N,,
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,,
+,source_system,STRING,来源系统,ETL,N,,
+,pt,STRING,分区日期,ETL,N,,
+
+
+模型名,dwd_trd_refund_df
+中文名,事实表-refund
+数据来源,ods_mall_oltp_refund_info
+主题,trd
+层级,DWD
+说明,事实表: trd-refund
+粒度,一行一笔退款申请
+事实类型,transaction
+分区字段,pt
+字段,字段名,字段类型,字段说明,数据来源,是否为空,维度,度量
+,refund_id,STRING,refund业务键,首取,N,,
+,user_sk,BIGINT,关联 dim_user 的代理键,user_id,N,Y,
+,sku_sk,BIGINT,关联 dim_sku 的代理键,sku_id,N,Y,
+,refund_amount,"DECIMAL(16,2)",退款金额,refund_amount,N,,Y
+,is_valid,INT,是否有效记录,ETL,N,,
+,etl_insert_time,TIMESTAMP,ETL插入时间,ETL,N,,
+,etl_update_time,TIMESTAMP,ETL更新时间,ETL,Y,,
+,source_system,STRING,来源系统,ETL,N,,
+,pt,STRING,分区日期,ETL,N,,
+
+

@@ -1,0 +1,50 @@
+# 配置文件模板
+# 将此文件复制为 config.yaml 并填写实际的数据库连接信息
+# 注意：config.yaml 文件已被 .gitignore 忽略，不会被提交到版本控制
+
+# 数据库配置
+database:
+  # 主MySQL数据库
+  yummy_mysql:
+    type: mysql
+    host: your_database_host
+    port: 3306
+    user: your_username
+    password: your_password
+    dbname: your_database_name
+  # 备用MySQL数据库
+  # backup_mysql:
+  #   type: mysql
+  #   host: localhost
+  #   port: 3306
+  #   user: root
+  #   password: your_password
+  #   dbname: test_db
+  # PostgreSQL数据库
+  # postgres:
+  #   type: postgresql
+  #   host: localhost
+  #   port: 5432
+  #   user: postgres
+  #   password: postgres_password
+  #   dbname: test_db
+  # SQLite数据库
+  # sqlite:
+  #   type: sqlite
+  #   database: ./data.db
+  # Oracle数据库
+  # oracle:
+  #   type: oracle
+  #   host: localhost
+  #   port: 1521
+  #   user: system
+  #   password: oracle_password
+  #   service_name: ORCL
+  # SQL Server数据库
+  # sqlserver:
+  #   type: sqlserver
+  #   host: localhost
+  #   port: 1433
+  #   user: sa
+  #   password: sqlserver_password
+  #   dbname: test_db

@@ -1,0 +1,723 @@
+# ========================================
+# CDM建模 - 生命周期规则 (SCD策略)
+# ========================================
+# 维度表缓慢变化维度(Slowly Changing Dimension)处理策略
+# SCD Type I: 覆盖 | Type II: 拉链表 | Type III: 混合
+
+dimension_lifecycle:
+  
+  # ============ SCD Type I: 覆盖更新 (无历史) ============
+  type_1:
+    name: "SCD Type I - 覆盖更新"
+    description: "不保留历史数据，新值覆盖旧值。适合变化频繁且不需要追踪历史的维度"
+    
+    characteristics:
+      - storage_simple: true
+      - history_preserved: false
+      - query_performance: "最高"
+      - storage_requirement: "最低"
+    
+    suitable_for:
+      - 门店名称 (变更不频繁，无需追踪变化)
+      - 商品分类 (偶尔调整，不需历史对比)
+      - 地区编码 (基本稳定)
+    
+    not_suitable_for:
+      - 客户属性 (需要追踪变化)
+      - 商品价格 (需要对比历史价格)
+      - 员工信息 (需要离职追踪)
+    
+    trigger_conditions:
+      - update_frequency: "low"              # 低频更新
+      - has_update_time: false               # 无update_time字段
+      - change_importance: "low"             # 变化不重要
+    
+    comment_keywords:
+      - "不需要保留历史"
+      - "覆盖"
+      - "Type I"
+      - "SCD 1"
+    
+    fields:
+      required:
+        - business_key                       # 业务键（唯一标识）
+        - attributes                         # 维度属性
+      optional:
+        - update_time                        # 可选的更新时间
+      forbidden:
+        - begin_date
+        - end_date
+        - is_active
+    
+    scd_fields: []                           # 无SCD字段
+    
+    sql_template: |
+      INSERT OVERWRITE TABLE dim_{{ table_name }} PARTITION(pt='${PT_DATE}')
+      SELECT 
+        {{ business_key }},
+        {{ attributes }}
+      FROM dws_{{ domain }}_{{ entity }}_source
+      WHERE pt = '${PT_DATE}'
+    
+    examples:
+      - name: "店铺维度"
+        record: "dim_shop (shop_id, shop_name, region)"
+      - name: "商品分类"
+        record: "dim_category (category_id, category_name, category_level)"
+  
+  # ============ SCD Type II: 拉链表 (完整历史) ============
+  type_2:
+    name: "SCD Type II - 拉链表(历史追踪)"
+    description: "完整保留维度变化历史。每条数据包含生效和失效日期，用于时间维度分析"
+    
+    characteristics:
+      - storage_simple: false
+      - history_preserved: true
+      - query_performance: "中等"
+      - storage_requirement: "高"
+      - complexity: "高"
+    
+    suitable_for:
+      - 客户维度 (地址、等级、状态变化需追踪)
+      - 商品维度 (分类、价格、供应商变化)
+      - 员工维度 (部门、职位、薪级变化)
+      - 供应商维度 (合作状态、等级变化)
+    
+    trigger_conditions:
+      - update_frequency: "medium"           # 中等频率更新
+      - has_update_time: true                # 有update_time字段
+      - change_importance: "high"            # 变化很重要
+      - temporal_analysis: true              # 需要时间分析
+    
+    comment_keywords:
+      - "拉链表"
+      - "历史"
+      - "追踪"
+      - "Type II"
+      - "SCD 2"
+      - "缓慢变化"
+    
+    fields:
+      required:
+        - business_key
+        - attributes
+        - begin_date                         # 生效日期 (新增)
+        - end_date                           # 失效日期 (新增)
+        - is_active                          # 是否当前记录 (新增)
+      optional:
+        - update_time                        # 来源系统更新时间
+    
+    scd_fields:
+      - name: "begin_date"
+        type: "STRING"
+        description: "维度值生效日期（开始日期）"
+        format: "YYYY-MM-DD"
+        default: "*"                         # 使用${PT_DATE}赋值
+        usage: "标记该维度值从何时开始有效"
+      
+      - name: "end_date"
+        type: "STRING"
+        description: "维度值失效日期（结束日期）"
+        format: "YYYY-MM-DD"
+        default: "'9999-12-31'"
+        usage: "标记该维度值的失效日期，当前记录为9999-12-31"
+      
+      - name: "is_active"
+        type: "INT"
+        description: "是否当前活跃记录"
+        values: [0, 1]                       # 1=当前有效, 0=历史记录
+        default: 1
+        usage: "快速查询当前维度值"
+    
+    sql_template: |
+      -- SCD Type II 全量覆盖方案
+      WITH source_data AS (
+        SELECT 
+          {{ business_key }},
+          {{ attributes }},
+          '${PT_DATE}' as begin_date
+        FROM dws_{{ domain }}_{{ entity }}_source
+        WHERE pt = '${PT_DATE}'
+      ),
+      existing_records AS (
+        SELECT 
+          {{ business_key }},
+          {{ attributes }},
+          begin_date,
+          end_date,
+          is_active
+        FROM dim_{{ entity }}_scd2
+        WHERE is_active = 1
+      ),
+      changed_records AS (
+        SELECT 
+          e.{{ business_key }},
+          e.{{ attributes }},
+          e.begin_date,
+          '${PT_DATE}' as end_date,
+          0 as is_active
+        FROM existing_records e
+        FULL OUTER JOIN source_data s
+          ON e.{{ business_key }} = s.{{ business_key }}
+        WHERE s.{{ business_key }} IS NULL 
+           OR (s.{{ attributes }} != e.{{ attributes }})
+      )
+      INSERT OVERWRITE TABLE dim_{{ entity }}_scd2 PARTITION(pt='${PT_DATE}')
+      SELECT * FROM (
+        SELECT 
+          {{ business_key }},
+          {{ attributes }},
+          begin_date,
+          '9999-12-31' as end_date,
+          1 as is_active
+        FROM source_data
+        UNION ALL
+        SELECT 
+          {{ business_key }},
+          {{ attributes }},
+          begin_date,
+          end_date,
+          is_active
+        FROM changed_records
+        UNION ALL
+        SELECT 
+          {{ business_key }},
+          {{ attributes }},
+          begin_date,
+          end_date,
+          is_active
+        FROM existing_records
+        WHERE is_active = 1
+      )
+    
+    examples:
+      - name: "客户维度"
+        record: "dim_customer_scd2 (customer_id, customer_name, city, level, begin_date, end_date, is_active)"
+        history: "客户从Silver升级到Gold时，原记录设为is_active=0, end_date=升级日，新记录设为is_active=1"
+      
+      - name: "商品维度"
+        record: "dim_product_scd2 (product_id, product_name, category, price, supplier_id, begin_date, end_date, is_active)"
+        history: "商品价格变化时，保留历史价格记录，用于同比分析"
+  
+  # ============ SCD Type III: 混合型 (当前+对前值) ============
+  type_3:
+    name: "SCD Type III - 混合型(当前值+前值对比)"
+    description: "同时保存当前值和前一个值。用于简单对比，存储消耗介于Type I和II之间"
+    
+    characteristics:
+      - storage: "中等"
+      - history_preserved: "部分"
+      - query_performance: "高"
+      - complexity: "中等"
+      - use_case: "简单对比分析"
+    
+    suitable_for:
+      - 地区维度 (很少变化，偶需对比)
+      - 状态维度 (当前状态+前一状态)
+      - 等级维度 (变升或降级时需对比)
+    
+    not_suitable_for:
+      - 高频变化的维度
+      - 需要完整历史的维度
+      - 多次变化需要追踪的维度
+    
+    trigger_conditions:
+      - update_frequency: "very_low"         # 非常低频
+      - change_importance: "medium"          # 中等重要性
+      - history_depth: "shallow"             # 只需浅历史
+    
+    fields:
+      required:
+        - business_key
+        - current_attributes
+        - prior_attributes
+        - effective_date
+      optional:
+        - change_reason
+    
+    special_fields:
+      - name: "current_{{ attribute }}"
+        type: "same_as_source"
+        description: "当前值"
+      
+      - name: "prior_{{ attribute }}"
+        type: "same_as_source"
+        description: "前一个值（对比用）"
+      
+      - name: "effective_date"
+        type: "STRING"
+        description: "本次变化的有效日期"
+
+# ========================================
+# 自动SCD策略判断规则
+# ========================================
+auto_detection:
+  enabled: true
+  
+  # 优先级顺序：优先使用高优先级的判断规则
+  priority_order:
+    1: "explicit_comment"        # 注释中的显式SCD类型标记
+    2: "has_update_time"         # 是否存在update_time字段
+    3: "change_frequency"        # 变化频率分析
+    4: "table_naming"            # 表名中的关键词
+    5: "default_type_1"          # 默认SCD Type I
+  
+  # 规则1：注释中的显式标记
+  explicit_comment:
+    patterns:
+      - keywords: ["type.?ii", "type.?2", "拉链表", "缓慢变化"]
+        result: "type_2"
+        confidence: 0.99
+      - keywords: ["type.?iii", "type.?3", "前值", "对比"]
+        result: "type_3"
+        confidence: 0.95
+      - keywords: ["type.?i", "type.?1", "覆盖", "无历史"]
+        result: "type_1"
+        confidence: 0.99
+  
+  # 规则2：update_time字段判断
+  has_update_time:
+    if_exists: "type_2"          # 有update_time → Type II
+    confidence: 0.80
+    rationale: "存在update_time说明系统追踪了变化"
+  
+  # 规则3：表名关键字
+  table_naming:
+    keywords:
+      - pattern: "scd2|拉链|历史"
+        result: "type_2"
+        confidence: 0.85
+      - pattern: "snapshot|快照"
+        result: "type_2"
+        confidence: 0.80
+      - pattern: "current|当前"
+        result: "type_1"
+        confidence: 0.70
+  
+  # 规则4：基于字段特征的启发式判断
+  heuristic:
+    indicators:
+      - field_count_gt_10: "suggest_type_2"      # 字段多 → 可能需要追踪
+      - has_status_field: "suggest_type_2"       # 有状态字段 → 可能变化
+      - has_amount_field: "suggest_type_2"       # 有金额字段 → 可能变化
+      - all_static_dims: "suggest_type_1"        # 全是静态属性 → 类型I
+
+# ========================================
+# SCD策略配置示例
+# ========================================
+examples:
+  
+  - table: "dim_customer"
+    strategy: "type_2"
+    reason: "客户属性频繁变化（等级、地址），需追踪历史"
+    fields:
+      - customer_id (business_key)
+      - customer_name
+      - city
+      - level
+      - update_time (SCD触发)
+    scd_fields:
+      - begin_date
+      - end_date
+      - is_active
+  
+  - table: "dim_product"
+    strategy: "type_2"
+    reason: "商品价格、分类变化，需对比历史"
+    fields:
+      - product_id (business_key)
+      - product_name
+      - category
+      - price
+      - supplier_id
+      - update_time (SCD触发)
+    scd_fields:
+      - begin_date
+      - end_date
+      - is_active
+  
+  - table: "dim_shop"
+    strategy: "type_1"
+    reason: "店铺基本信息稳定，无需历史追踪"
+    fields:
+      - shop_id (business_key)
+      - shop_name
+      - region
+      - manager_name
+    scd_fields: []
+  
+  - table: "dim_date"
+    strategy: "type_1"
+    reason: "日期维度完全静态"
+    fields:
+      - date_id (business_key)
+      - year
+      - month
+      - day
+      - week
+    scd_fields: []
+
+# ========================================
+# 增量类型判断规则 (Increment Type: di/df)
+# ========================================
+# 用于判断表是增量表(di)还是全量表(df)
+# di (Delta Increment): 增量表，记录业务变化和事件
+# df (Delta Full): 全量表，快照式数据，无时间追踪
+
+increment_type_detection:
+  
+  # ============ Method 1: 通过表名判断 ============
+  detect_by_naming:
+    priority: "HIGH"
+    rationale: "表名反映了表的业务语义，是判断增量类型的首选方法"
+    
+    # DI (增量表) 表名特征
+    di_patterns:
+      - category: "记录/日志类"
+        keywords:
+          - "log_*"       # 日志表
+          - "record_*"    # 记录表
+          - "history_*"   # 历史表
+          - "audit_*"     # 审计表
+          - "trace_*"     # 追踪表
+        examples:
+          - log_user_login (用户登录日志)
+          - record_operation (操作记录)
+          - audit_change (审计变更)
+      
+      - category: "事务/流水类"
+        keywords:
+          - "order_*"         # 订单表
+          - "payment_*"       # 支付表
+          - "invoice_*"       # 发票表
+          - "receipt_*"       # 收据表
+          - "transaction_*"   # 交易表
+          - "trade_*"         # 交易表
+        examples:
+          - order_info (订单信息)
+          - payment_record (支付记录)
+          - transaction_detail (交易明细)
+      
+      - category: "明细/详情类"
+        keywords:
+          - "detail_*"   # 明细表
+          - "item_*"     # 条目表
+          - "line_*"     # 行项目表
+        examples:
+          - detail_order_item (订单明细)
+          - item_line (行项目明细)
+      
+      - category: "行为/事件类"
+        keywords:
+          - "click_*"     # 点击事件
+          - "event_*"     # 事件表
+          - "action_*"    # 动作表
+          - "view_*"      # 浏览表
+          - "search_*"    # 搜索表
+        examples:
+          - click_event (用户点击事件)
+          - event_user_behavior (用户行为事件)
+          - search_query (搜索查询)
+      
+      - category: "通知/通信类"
+        keywords:
+          - "message_*"       # 消息表
+          - "notification_*"  # 通知表
+          - "alert_*"         # 告警表
+          - "comment_*"       # 评论表
+          - "feedback_*"      # 反馈表
+        examples:
+          - message_user (用户消息)
+          - notification_send (通知发送记录)
+          - feedback_comment (用户反馈)
+      
+      - category: "状态变更类"
+        keywords:
+          - "status_*"        # 状态表
+          - "state_*"         # 状态表
+          - "change_*"        # 变更表
+          - "transition_*"    # 转换表
+        examples:
+          - status_change (状态变更记录)
+          - transition_order_state (订单状态转换)
+    
+    # DF (全量表) 表名特征
+    df_patterns:
+      - category: "基础信息/配置类"
+        keywords:
+          - "code_*"          # 代码表
+          - "config_*"        # 配置表
+          - "dict_*"          # 字典表
+          - "setting_*"       # 设置表
+          - "parameter_*"     # 参数表
+        examples:
+          - code_region (地区代码表)
+          - config_system (系统配置表)
+          - dict_status (状态字典)
+      
+      - category: "分类/目录类"
+        keywords:
+          - "category*"    # 分类
+          - "catalog*"     # 目录
+          - "type*"        # 类型
+          - "class*"       # 类别
+        examples:
+          - category_product (商品分类)
+          - catalog_menu (菜单目录)
+      
+      - category: "主体对象类"
+        keywords:
+          - "user"         # 用户
+          - "customer"     # 客户
+          - "member"       # 会员
+          - "product"      # 产品
+          - "goods"        # 商品
+          - "item"         # 物品
+          - "store"        # 店铺
+          - "shop"         # 商店
+          - "warehouse"    # 仓库
+          - "employee"     # 员工
+          - "staff"        # 员工
+        examples:
+          - user_info (用户表)
+          - customer_master (客户主表)
+          - product_catalog (商品目录表)
+      
+      - category: "关系/映射类"
+        keywords:
+          - "rel_*"              # 关联
+          - "mapping_*"          # 映射
+          - "relation_*"         # 关系
+          - "association_*"      # 关联
+        examples:
+          - rel_user_role (用户角色关联表)
+          - mapping_code_name (代码名称映射表)
+      
+      - category: "维度/元数据类"
+        keywords:
+          - "meta_*"         # 元数据
+          - "dimension_*"    # 维度
+          - "attr_*"         # 属性
+          - "schema_*"       # 模式
+        examples:
+          - meta_table_schema (表结构元数据)
+          - dimension_info (维度信息表)
+      
+      - category: "组织机构类"
+        keywords:
+          - "org_*"          # 组织
+          - "department*"    # 部门
+          - "team*"          # 团队
+          - "group*"         # 群组
+        examples:
+          - org_structure (组织结构表)
+          - department_info (部门信息表)
+  
+  # ============ Method 2: 通过表结构判断 ============
+  detect_by_structure:
+    priority: "MEDIUM"
+    rationale: "表字段特征反映了表的性质"
+    
+    # DI (增量表) 表结构特征
+    di_characteristics:
+      
+      - feature: "时间戳字段（优先级最高）"
+        fields:
+          - "create_time"      # 创建时间
+          - "create_date"      # 创建日期
+          - "gmt_create"       # 创建时间(阿里规范)
+          - "created_at"       # 创建于
+          - "insert_time"      # 插入时间
+          - "update_time"      # 更新时间
+          - "modify_time"      # 修改时间
+          - "gmt_modified"     # 修改时间(阿里规范)
+          - "updated_at"       # 更新于
+          - "last_modified"    # 最后修改
+        confidence: 0.95
+        rule: "只需命中其中任意一个时间字段"
+        rationale: "有时间戳意味着系统追踪了数据变化，典型的增量表特征"
+      
+      - feature: "自增/序列字段"
+        fields:
+          - "id INT AUTO_INCREMENT"           # 自增ID
+          - "seq_no BIGINT AUTO_INCREMENT"    # 序列号
+          - "serial_id BIGINT AUTO_INCREMENT" # 序列ID
+        confidence: 0.80
+        rule: "字段类型包含AUTO_INCREMENT或使用SQL SEQUENCE生成"
+        rationale: "自增字段通常用于事务/日志表，表示事件发生的顺序"
+      
+      - feature: "业务时间字段"
+        fields:
+          - "biz_date"         # 业务日期
+          - "trade_date"       # 交易日期
+          - "effective_date"   # 生效日期
+          - "occur_time"       # 发生时间
+          - "event_time"       # 事件时间
+        confidence: 0.85
+        rule: "只需命中其中任意一个业务时间字段"
+        rationale: "业务时间字段通常出现在事务型表，支持时间维度分析"
+    
+    # DF (全量表) 表结构特征
+    df_characteristics:
+      
+      - feature: "缺乏时间标识"
+        indicators:
+          - "无任何时间相关字段（create_time/update_time都无）"
+          - "无业务日期字段（biz_date/trade_date都无）"
+          - "无insert_time / modify_time"
+        confidence: 0.70
+        rule: "所有时间字段都不存在"
+        rationale: "没有时间标识的表通常是快照式的主体数据或配置表"
+      
+      - feature: "简单键值结构"
+        indicators:
+          - "字段数 ≤ 5个"
+          - "主键为业务编码（非自增）"
+          - "主要字段为 code/name/value 类型"
+        confidence: 0.60
+        rule: "需要同时满足以上三个指标"
+        rationale: "简单结构的表通常是参考表或配置表"
+  
+  # ============ 优先级规则 (Conflict Resolution) ============
+  priority_rules:
+    
+    - rule: "表名判断优先于表结构判断"
+      level: 1
+      rationale: "表名更直接反映业务语义"
+      example: |
+        如果表名是 order_info （命中di_patterns），
+        但缺少时间字段（命中df_characteristics），
+        则优先判定为 di（增量）
+    
+    - rule: "时间戳字段优先于自增字段"
+      level: 2
+      rationale: "时间戳直接标识数据变化"
+      condition: "在表结构判断中"
+      example: |
+        同时有 create_time 和 AUTO_INCREMENT id，
+        则优先判定为 di（增量）
+    
+    - rule: "create_time优先于update_time"
+      level: 3
+      rationale: "create_time表示初始创建时间，更能代表增量特性"
+      condition: "在表结构判断中"
+      example: |
+        同时有 create_time 和 update_time，
+        则优先参考 create_time
+    
+    - rule: "表名和表结构同时命中时"
+      level: 4
+      criteria:
+        - "只需表名or表结构其中一个命中对应类型就行"
+        - "如果两者结果一致，确信度最高"
+        - "如果两者结果冲突，则遵循Level 1-3的优先级"
+
+  # ============ 自动判断流程 ============
+  detection_workflow:
+    description: "自动判断表是DI(增量)还是DF(全量)的流程"
+    
+    step_1:
+      question: "检查表名是否命中 di_patterns"
+      answers:
+        - condition: "是"
+          result: "判定为 DI（增量），置信度0.95"
+        - condition: "否"
+          result: "进入Step 2"
+    
+    step_2:
+      question: "检查表名是否命中 df_patterns"
+      answers:
+        - condition: "是"
+          result: "判定为 DF（全量），置信度0.85"
+        - condition: "否"
+          result: "进入Step 3"
+    
+    step_3:
+      question: "检查表结构是否有时间戳字段"
+      answers:
+        - condition: "有create_time/update_time/biz_date/event_time等"
+          result: "判定为 DI（增量），置信度0.95"
+        - condition: "无任何时间字段"
+          result: "进入Step 4"
+    
+    step_4:
+      question: "检查表结构是否有自增字段"
+      answers:
+        - condition: "有AUTO_INCREMENT或SEQUENCE"
+          result: "判定为 DI（增量），置信度0.80"
+        - condition: "无"
+          result: "进入Step 5"
+    
+    step_5:
+      question: "检查是否为简单键值结构"
+      answers:
+        - condition: "字段数≤5 且主键为业务编码 且为 code/name/value 类型"
+          result: "判定为 DF（全量），置信度0.60"
+        - condition: "否"
+          result: "进入Step 6"
+    
+    step_6:
+      question: "默认策略"
+      answer: "默认判定为 DI（增量），置信度0.50"
+      rationale: "现代数据仓库通常优先采用增量表以支持完整的业务追踪，缺乏明确特征时采用此策略"
+
+  # ============ 判断示例 ============
+  examples:
+    
+    - table_name: "dwd_order_info"
+      business_semantic: "订单信息表"
+      detection:
+        step_1: "表名命中 order_* pattern（di_patterns）"
+        result: "DI（增量）"
+        confidence: 0.95
+        reason: "表名清晰表明这是事务流水表，记录订单操作"
+    
+    - table_name: "dim_product_code"
+      business_semantic: "商品代码表"
+      detection:
+        step_1: "表名命中 code_* pattern（df_patterns）"
+        result: "DF（全量）"
+        confidence: 0.85
+        reason: "表名清晰表明这是参考表，定义代码常量"
+    
+    - table_name: "trans_user_behavior"
+      business_semantic: "用户行为事件表"
+      structure:
+        - event_id: BIGINT AUTO_INCREMENT
+        - event_time: TIMESTAMP
+        - user_id: BIGINT
+        - action_type: STRING
+      detection:
+        step_1: "表名 trans_ 不直接命中pattern，继续"
+        step_2: "表名不命中df_patterns，继续"
+        step_3: "表结构有 event_time（时间戳字段）"
+        result: "DI（增量）"
+        confidence: 0.95
+        reason: "关键字 event_time 明确表示这是事件追踪表"
+    
+    - table_name: "ods_customer_master"
+      business_semantic: "客户主表"
+      structure:
+        - customer_id: BIGINT
+        - customer_name: STRING
+        - city: STRING
+        - mobile: STRING
+      detection:
+        step_1: "表名 customer 命中主体对象类（df_patterns）"
+        result: "DF（全量）"
+        confidence: 0.85
+        reason: "表名表示这是客户主体数据表，属于变化不频繁的维度级表"
+    
+    - table_name: "ods_order_detail"
+      business_semantic: "订单明细表"
+      structure:
+        - order_detail_id: BIGINT AUTO_INCREMENT
+        - order_id: BIGINT
+        - product_id: BIGINT
+        - quantity: DECIMAL
+        - create_time: TIMESTAMP
+      detection:
+        step_1: "表名命中 detail_* pattern（di_patterns）"
+        result: "DI（增量）"
+        confidence: 0.95
+        reason: "明细表通常记录事务变化，create_time字段进一步确认"

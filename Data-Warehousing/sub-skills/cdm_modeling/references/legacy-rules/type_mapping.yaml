@@ -1,0 +1,350 @@
+# ========================================
+# CDM建模 - 字段类型映射与分类规则
+# ========================================
+# 从ODS表识别和分类字段，用于后续的DIM/DWD建模
+
+field_classification:
+  
+  # *** 业务键 - Dimension or Fact的唯一标识符
+  business_key:
+    patterns:
+      - id: "explicit_comment"
+        condition: "comment_contains"
+        keywords:
+          - "主键"
+          - "业务键"
+          - "primary key"
+          - "唯一标识"
+        priority: 100
+      
+      - id: "naming_convention"
+        condition: "name_ends_with"
+        suffixes:
+          - "_id"
+          - "_code"
+        field_types: ["BIGINT", "INT", "STRING"]
+        priority: 50
+      
+      - id: "table_name_derived"
+        condition: "name_equals"
+        rule: "Extract from table name: {entity}_id"
+        example: "sales_order table → order_id is business_key"
+        priority: 30
+    
+    usage:
+      DIM: "Dimension business_key - used for SCD join logic"
+      DWD: "Fact foreign key reference"
+      DWS: "Preserve from ODS"
+  
+  # *** 外键 - 关联其他维度表
+  foreign_key:
+    patterns:
+      - id: "explicit_comment"
+        condition: "comment_contains"
+        keywords:
+          - "关联"
+          - "外键"
+          - "foreign key"
+          - "references"
+        priority: 100
+      
+      - id: "naming_convention"
+        condition: "name_ends_with"
+        suffixes:
+          - "_id"
+        exclude_if:
+          - name_equals: "{table_name}_id"  # 排除当前表的业务键
+        field_types: ["BIGINT", "INT"]
+        priority: 60
+      
+      - id: "dimension_reference"
+        condition: "name_contains"
+        keywords:
+          - "shop_id"
+          - "customer_id"
+          - "product_id"
+          - "supplier_id"
+          - "employee_id"
+        priority: 50
+    
+    usage:
+      DIM: "Ignored (DIM不需要外键)"
+      DWD: "Converted to Dimension _sk (Surrogate Key) through JOIN"
+      DWS: "Preserve from ODS"
+  
+  # *** 度量 - 可以被聚合的数值
+  measure:
+    patterns:
+      - id: "explicit_comment"
+        condition: "comment_contains"
+        keywords:
+          - "可加总"
+          - "度量"
+          - "聚合函数"
+          - "metric"
+        priority: 100
+      
+      - id: "amount_type"
+        condition: "name_ends_with"
+        suffixes:
+          - "_amount"
+          - "_price"
+          - "_cost"
+          - "_fee"
+          - "_revenue"
+          - "_expense"
+        field_types: ["DECIMAL", "INT", "BIGINT", "FLOAT", "DOUBLE"]
+        aggregation: "SUM"
+        priority: 90
+      
+      - id: "quantity_type"
+        condition: "name_ends_with"
+        suffixes:
+          - "_qty"
+          - "_quantity"
+          - "_count"
+          - "_number"
+        field_types: ["INT", "BIGINT"]
+        aggregation: "SUM"
+        priority: 85
+      
+      - id: "rate_type"
+        condition: "name_ends_with"
+        suffixes:
+          - "_rate"
+          - "_ratio"
+          - "_percent"
+        field_types: ["DECIMAL", "FLOAT", "DOUBLE"]
+        aggregation: "AVG"
+        priority: 70
+      
+      - id: "monetary_field"
+        condition: "name_contains"
+        keywords:
+          - "sales"
+          - "profit"
+          - "tax"
+          - "discount"
+        field_types: ["DECIMAL", "BIGINT"]
+        aggregation: "SUM"
+        priority: 60
+    
+    usage:
+      DIM: "Ignored (DIM only stores attributes)"
+      DWD: "Fact measures - preserved with column renaming"
+      CDM: "Subject of aggregation (SUM, AVG, COUNT)"
+  
+  # *** 属性 - 非可加总的描述性字段
+  attribute:
+    patterns:
+      - id: "text_type"
+        condition: "field_type_is"
+        types: ["STRING", "VARCHAR", "TEXT"]
+        exclude_if:
+          - name_ends_with: ["_id", "_code"]
+        priority: 80
+      
+      - id: "name_field"
+        condition: "name_ends_with"
+        suffixes:
+          - "_name"
+          - "_title"
+          - "_desc"
+          - "_description"
+          - "_label"
+        field_types: ["STRING"]
+        priority: 90
+      
+      - id: "status_field"
+        condition: "name_ends_with"
+        suffixes:
+          - "_type"
+          - "_kind"
+          - "_status"
+          - "_level"
+          - "_grade"
+        priority: 80
+      
+      - id: "flag_field"
+        condition: "name_starts_with"
+        prefixes:
+          - "is_"
+          - "has_"
+        priority: 70
+      
+      - id: "category_field"
+        condition: "comment_contains"
+        keywords:
+          - "分类"
+          - "类型"
+          - "category"
+        priority: 75
+    
+    usage:
+      DIM: "Core - Dimension attributes used for filtering/grouping"
+      DWD: "Optional - May denormalize key attributes from dimension"
+      CDM: "Used as GROUP BY dimensions"
+  
+  # *** 时间/时间戳
+  timestamp:
+    patterns:
+      - id: "create_time"
+        condition: "name_contains"
+        keywords:
+          - "create_time"
+          - "created_at"
+          - "event_time"
+          - "transaction_time"
+        field_types: ["TIMESTAMP", "STRING"]
+        usage_type: "EVENT_TIME"
+        priority: 100
+      
+      - id: "update_time"
+        condition: "name_contains"
+        keywords:
+          - "update_time"
+          - "updated_at"
+          - "modify_time"
+          - "last_modified"
+        field_types: ["TIMESTAMP", "STRING"]
+        usage_type: "SCD_TRACKING"
+        scd_trigger: true
+        priority: 100
+      
+      - id: "begin_time"
+        condition: "name_contains"
+        keywords:
+          - "begin_time"
+          - "start_time"
+          - "effective_date"
+        field_types: ["TIMESTAMP", "STRING", "DATE"]
+        priority: 80
+      
+      - id: "end_time"
+        condition: "name_contains"
+        keywords:
+          - "end_time"
+          - "finish_time"
+          - "expiry_date"
+          - "expire_time"
+        field_types: ["TIMESTAMP", "STRING", "DATE"]
+        priority: 80
+    
+    usage:
+      DIM: "Keep update_time for SCD II detection"
+      DWD: "create_time as fact timestamp, update_time for debugging"
+      ETL: "Used for incremental loading and SCD logic"
+  
+  # *** 分区键
+  partition_key:
+    patterns:
+      - id: "partition_keyword"
+        condition: "name_contains"
+        keywords:
+          - "pt"
+          - "partition_date"
+          - "yyyymmdd"
+        priority: 100
+      
+      - id: "date_field_final"
+        condition: "name_equals"
+        value: "pt"
+        priority: 100
+    
+    usage:
+      ODS: "Partition for source data (typically pt=YYYY-MM-DD)"
+      DWS: "Partition for cleaned data (same as ODS)"
+      DIM: "Not typically partitioned (slowly changing)"
+      DWD: "Partition for fact data"
+      CDM: "Partition for aggregates (time_id, first_date, etc.)"
+  
+  # *** 忽略字段 - 不导入到模型
+  ignore:
+    patterns:
+      - id: "metadata_field"
+        condition: "name_starts_with"
+        prefixes:
+          - "_etl_"
+          - "etl_"
+          - "_sys_"
+        priority: 100
+      
+      - id: "temp_field"
+        condition: "name_starts_with"
+        prefixes:
+          - "temp_"
+          - "tmp_"
+          - "_bak"
+        priority: 100
+      
+      - id: "deprecated"
+        condition: "comment_contains"
+        keywords:
+          - "废弃"
+          - "deprecated"
+          - "不使用"
+          - "do not use"
+        priority: 100
+
+# 字段类型规范化
+field_type_standardization:
+  database_type_to_hive:
+    # 数值类型
+    TINYINT: "INT"
+    SMALLINT: "INT"
+    INT: "INT"
+    INTEGER: "INT"
+    BIGINT: "BIGINT"
+    LONG: "BIGINT"
+    FLOAT: "FLOAT"
+    DOUBLE: "DOUBLE"
+    DECIMAL: "DECIMAL(18,2)"
+    NUMERIC: "DECIMAL(18,2)"
+    
+    # 字符串类型
+    CHAR: "STRING"
+    VARCHAR: "STRING"
+    STRING: "STRING"
+    TEXT: "STRING"
+    
+    # 日期时间类型
+    DATE: "STRING"         # 注意：Hive用STRING表示DATE
+    DATETIME: "STRING"
+    TIMESTAMP: "TIMESTAMP"
+    TIME: "STRING"
+    
+    # 其他
+    BOOLEAN: "INT"
+    BINARY: "STRING"
+  
+  # 字段长度推荐
+  length_guidelines:
+    id_fields: "BIGINT"           # 业务键用BIGINT
+    codes: "STRING(50)"           # 编码字符串
+    names: "STRING(200)"          # 名称字符串
+    descriptions: "STRING(1000)"  # 描述字符串
+    amounts: "DECIMAL(18,2)"      # 金额
+    quantities: "BIGINT"          # 数量
+    percentages: "DECIMAL(5,2)"   # 百分比
+    flags: "INT"                  # 标志位
+
+# 数据质量检查规则
+quality_checks:
+  non_null_keys:
+    - business_key
+    - foreign_key
+    - partition_key
+  
+  unique_constraints:
+    - business_key_per_table
+  
+  domain_validation:
+    amount_fields:
+      - range: "[0, 999999999999.99]"
+      - precision: 2
+    
+    percentage_fields:
+      - range: "[0, 100]"
+    
+    flag_fields:
+      - values: [0, 1]

@@ -1,0 +1,12 @@
+input:
+  dim_spec_file: "../../../output/dwm-bus-matrix/dwm_dim_table_spec.csv"
+  dwd_fact_spec_file: "../../../output/dwm-bus-matrix/dwm_dwd_fact_spec.csv"
+
+output:
+  target_dir: "../../../output/cdm-modeling"
+
+modeling:
+  default_scd_type: 1
+  default_fact_type: "transaction"
+  generate_ddl: true
+  generate_etl: true

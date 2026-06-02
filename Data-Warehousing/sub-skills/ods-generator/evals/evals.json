@@ -1,0 +1,45 @@
+{
+  "skill_name": "ods-generator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "请从Excel文件生成ODS层表结构，输入文件路径为 /Users/douguang/Documents/SQL_projects/input/warehouse/all_tables_metadata.xlsx，输出Excel文件路径为 /Users/douguang/Documents/SQL_projects/output/ods_tables.xlsx，输出SQL文件路径为 /Users/douguang/Documents/SQL_projects/output/ods_tables.sql",
+      "expected_output": "生成完成，输出Excel文件和SQL文件，包含正确的Hive DDL语句",
+      "files": [
+        "/Users/douguang/Documents/SQL_projects/input/warehouse/all_tables_metadata.xlsx"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "使用默认业务系统'erp'从Excel生成ODS表结构：输入 /Users/douguang/Documents/SQL_projects/input/warehouse/all_tables_metadata.xlsx，输出Excel /Users/douguang/Documents/SQL_projects/output/ods_erp.xlsx，输出SQL /Users/douguang/Documents/SQL_projects/output/ods_erp.sql",
+      "expected_output": "生成完成，所有表名以ods_erp_开头",
+      "files": [
+        "/Users/douguang/Documents/SQL_projects/input/warehouse/all_tables_metadata.xlsx"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "请处理包含数据类型信息的Excel文件生成Hive ODS表结构：输入 /Users/douguang/Documents/SQL_projects/input/warehouse/detailed_metadata.xlsx（包含数据类型和长度列），输出到 /Users/douguang/Documents/SQL_projects/output/ods_detailed/",
+      "expected_output": "生成完成，DDL中包含正确的数据类型映射（如INT、BIGINT、DECIMAL等）",
+      "files": [
+        "/Users/douguang/Documents/SQL_projects/input/warehouse/detailed_metadata.xlsx"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "从包含主键外键标记的Excel生成ODS表结构：输入 /Users/douguang/Documents/SQL_projects/input/warehouse/tables_with_keys.xlsx，输出Excel /Users/douguang/Documents/SQL_projects/output/ods_keys.xlsx，输出SQL /Users/douguang/Documents/SQL_projects/output/ods_keys.sql",
+      "expected_output": "生成完成，输出Excel中包含主键和外键字段列表",
+      "files": [
+        "/Users/douguang/Documents/SQL_projects/input/warehouse/tables_with_keys.xlsx"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "测试处理缺少业务系统标识列的Excel文件：输入 /Users/douguang/Documents/SQL_projects/input/warehouse/minimal_metadata.xlsx（只有表名、表中文名、字段名、字段注释），输出到 /Users/douguang/Documents/SQL_projects/output/ods_minimal/",
+      "expected_output": "生成完成，使用默认业务系统'mes'生成表名",
+      "files": [
+        "/Users/douguang/Documents/SQL_projects/input/warehouse/minimal_metadata.xlsx"
+      ]
+    }
+  ]
+}

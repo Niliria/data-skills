@@ -1,0 +1,482 @@
+# ========================================
+# CDM建模 - DIM维度表建模规则
+# ========================================
+# 维度表(Dimension Table)的设计约束和最佳实践
+
+dimension_modeling:
+  
+  # ============ 维度表的定义 ============
+  definition: |
+    维度表是Kimball维度建模中用于描述业务事实的参考表。
+    特点：
+    • 包含业务键（business_key）+ 广泛的描述性属性
+    • 粒度通常是某个实体的一个唯一标识（例：一个客户、一个商品、一个店铺）
+    • 通常较小，变化不频繁
+    • 用于事实表JOIN以支持多维分析
+  
+  # ============ DIM表命名 ============
+  naming:
+    prefix: "dim_"
+    format: "dim_{business_plate}_{entity}_[variant]"
+    
+    business_plates: "经济业务|资管业务|投资业务|公共账户|etc"
+    
+    variants:
+      - base: "dim_{business_plate}_{entity}"                 # 基础维度
+      - scd1: "dim_{business_plate}_{entity}"               # SCD Type I (默认)
+      - scd2: "dim_{business_plate}_{entity}_scd2"          # 拉链表（SCD Type II）
+    
+    examples:
+      - dim_securities_customer              # 经济业务-客户维度
+      - dim_securities_product               # 经济业务-产品维度
+      - dim_securities_product_scd2          # 经济业务-产品维度(拉链表)
+      - dim_asset_product                    # 资管业务-产品维度
+      - dim_asset_customer                   # 资管业务-客户维度
+      - dim_common_date                      # 公共-日期维度（无业务板块区别）
+      - dim_common_time                      # 公共-时间维度
+      - dim_common_region                    # 公共-地区维度
+    
+    naming_rationale: |  
+      添加业务板块前缀的原因：
+      • 避免不同业务板块的同名实体冲突（如经济业务的产品 vs 资管业务的产品）
+      • 清晰表现维度的业务领域归属
+      • 支持多中心业务的独立维度管理
+      • 公共维度（date/time/region）不加业务板块前缀
+    
+    # ============ 维度表增量特性识别 ============
+    # 注：维度表通常通过SCD Type II(拉链表)管理版本历史，而非采用di/df增量表方式
+    # 但在FROM ODS转换时，可以参考 lifecycle_rules.yaml > increment_type_detection
+    # 来识别源ODS表是否存在时间追踪能力，以便决定DIM是否需要SCD Type II
+    
+    dim_source_identification:
+      reference: "lifecycle_rules.yaml > increment_type_detection"
+      
+      purpose: |
+        识别ODS源表的增量特性，用于决策维度表SCD策略：
+        • 如果源ODS表有时间戳(create_time/update_time)→ 可采用SCD Type II
+        • 如果源ODS表无时间戳 → 采用SCD Type I(直接覆盖)
+      
+      key_identification_rules:
+        source_has_timestamps: "create_time/update_time/gmt_create等时间字段"
+        recommendation_scd2: "建议SCD Type II(拉链表)，捕捉变化历史"
+        
+      reference_rules: |
+        DI(增量)特征 - 源表有时间追踪：
+          • 表名pattern: log_*, record_*, history_*, order_*, payment_*, detail_*等
+          • 字段特征: create_time, gmt_create, update_time等
+          → 维度表应采用SCD Type II以保留历史版本
+        
+        DF(全量)特征 - 源表无时间追踪：
+          • 表名pattern: code_*, config_*, dict_*, customer, product等
+          • 字段特征: 无任何时间字段，简单键值结构
+          → 维度表采用SCD Type I，直接覆盖更新
+        
+        特殊情况：
+        • 慢速变化维度(如区域、部门): 优先用SCD Type II
+        • 快速变化维度(如日期、时间): 用SCD Type I
+        • 从流式/实时系统来源: 可考虑SCD Type III(同时保留前一值)
+  
+  # ============ DIM表的必需元素 ============
+  required_elements:
+    
+    # 1. 维度键（必需）
+    business_key:
+      description: "业务键 - 维度的唯一标识符，来自上游系统"
+      naming: "{entity}_id"
+      examples:
+        - customer_id
+        - product_id
+        - shop_id
+      requirements:
+        - not_null: true
+        - unique: true
+        - immutable: true
+        - source_from: "ODS"
+    
+    surrogate_key:
+      description: "代理键 - 系统生成的替代键，用于事实表外键"
+      naming: "{entity}_sk"
+      type: "BIGINT"
+      examples:
+        - customer_sk
+        - product_sk
+        - shop_sk
+      
+      generation_strategy:
+        method: "ROW_NUMBER() OVER (ORDER BY {entity}_id)"
+        implementation: |
+          使用SQL的ROW_NUMBER()函数生成递增的代理键:
+          ROW_NUMBER() OVER (ORDER BY business_key, pt DESC) AS {entity}_sk
+          
+          或使用分布式ID生成方案(如雪花ID):
+          SNOWFLAKE_ID() AS {entity}_sk
+        
+        order_by: "按business_key + pt(分区日期)排序，保证同一业务键的代理键稳定递增"
+      
+      persistence: "永久保留，不回退。代理键一旦生成不允许修改或重新生成。"
+      
+      scd_handling: |
+        SCD Type I: 代理键不变，直接覆盖属性
+        SCD Type II: 维度变化时生成新的代理键(新版本记录)，旧代理键关联旧版本记录
+      
+      requirements:
+        - not_null: true
+        - unique: true
+        - auto_generated: true
+        - immutable: true
+        - sequential: true
+        - usage: "事实表外键"
+    
+    # 2. 维度属性（必需）
+    dimension_attributes:
+      description: "维度属性 - 用于分析的描述性字段"
+      examples:
+        customer: ["customer_name", "city", "state", "country", "customer_level", "customer_type"]
+        product: ["product_name", "category", "subcategory", "brand", "color", "size"]
+        shop: ["shop_name", "region", "manager", "opening_date", "shop_type"]
+      
+      types:
+        - text_attribute: "Name, Description, Status (STRING)"
+        - categorical: "Type, Level, Grade, Category (ENUM/INT)"
+        - hierarchical: "Region>City>Store, Category>SubCategory (用于钻取)"
+        - date_attribute: "開業日期, 關閉日期 (用於時間分析)"
+      
+      requirements:
+        - non_additive: true              # 属性不能对值求和
+        - descriptive: true               # 用于描述而非度量
+        - source: "ODS"
+    
+    # 3. SCD字段（按SCD类型）
+    scd_fields:
+      type_1: []                           # Type I 无特殊SCD字段
+      type_2:
+        - begin_date: "生效日期"
+        - end_date: "失效日期 (默认9999-12-31)"
+        - is_active: "是否当前记录 (1=当前, 0=历史)"
+      type_3:
+        - current_values: "当前值"
+        - prior_values: "前一个值"
+        - effective_date: "变更日期"
+  
+  # ============ DIM表的可选元素 ============
+  optional_elements:
+    
+    # 代码/编码
+    codes:
+      description: "业务编码，用于关联外部系统"
+      naming: "{entity}_code"
+      examples:
+        - customer_code
+        - product_code
+        - shop_code
+    
+    # 分层维度
+    hierarchies:
+      description: "维度之间的层级关系"
+      examples:
+        - geography: "国家 > 省份 > 城市 > 地区"
+        - product: "一级分类 > 二级分类 > 三级分类 > SKU"
+        - organization: "集团 > 分公司 > 部门 > 小组"
+    
+    # 有效期
+    valid_period:
+      effective_date: "生效日期"
+      expiration_date: "失效日期"
+      description: "维度记录的业务有效期"
+    
+    # 审计字段
+    audit_fields:
+      created_date: "创建日期"
+      modified_date: "修改日期"
+      source_system: "来源系统"
+      etl_insert_time: "ETL插入时间"
+      etl_update_time: "ETL更新时间"
+  
+  # ============ DIM表标准特征 ============
+  characteristics:
+    
+    grain_level: "一条记录代表维度的一个唯一实例"
+    examples:
+      - "dim_customer：一行 = 一个客户"
+      - "dim_product：一行 = 一个SKU"
+      - "dim_shop：一行 = 一个门店"
+    
+    size: "相对较小，通常百万级"
+    update_frequency: "低频至中频（数据不是实时的）"
+    denormalization: "通常反范式化，包含多个层级的属性"
+    
+    data_quality: "高质量，作为分析的基准"
+    timeliness: "通常T+1加载（不是实时）"
+
+  # ============ DIM表的设计最佳实践 ============
+  best_practices:
+    
+    # 1. 维度属性的关键字段
+    key_attributes:
+      rule: "包含所有用于分析和过滤的关键属性"
+      examples:
+        - 客户维度：等级、城市、城市等级、VIP标签、注册日期
+        - 商品维度：品类、品牌、颜色、尺码、价格区间
+        - 店铺维度：区域、店铺类型、开业状态、所属区域经理
+      rationale: "维度属性越丰富，分析维度越灵活"
+    
+    # 2. 反范式化策略
+    denormalization:
+      principle: "在维度表中反范式化相关属性以提高查询性能"
+      examples:
+        - 商品维度：包含品类信息而非外键指向品类表
+        - 店铺维度：包含所属区域和区域经理而非外键
+      tradeoff: "存储增加 vs 查询性能提升（在维度表上值得）"
+    
+    # 3. 缓慢变化维度(SCD)的选择 → 扩展为完整决策矩阵
+    scd_selection:
+      type_1_if: "维度变化不重要 OR 无需历史追踪"
+      type_2_if: "维度变化需要追踪 AND 需要历史对比"
+      type_3_if: "维度变化很少 AND 只需要当前和前1值对比"
+    
+    # 新增: SCD决策矩阵
+    scd_decision_matrix:
+      introduction: "通过多维评估快速决定维度采用哪种SCD类型"
+      
+      # 维度1: 业务需求
+      business_requirements:
+        need_full_history: |  
+          需要完整历史追踪（如客户等级变化历史）
+          → 采用 SCD Type II (拉链表)
+          
+        need_only_previous: |
+          仅需知道上一个值（如员工前任经理）
+          → 推荐 SCD Type III
+          
+        no_history_needed: |
+          不需要历史记录（如日期维度）
+          → 采用 SCD Type I (直接覆盖)
+      
+      # 维度2: 数据质量和特性
+      data_characteristics:
+        has_reliable_timestamp: |
+          源ODS有create_time/update_time可靠时间戳
+          → 可采用 SCD Type II
+          
+        no_timestamp: |
+          源ODS无时间字段（参考increment_type_detection的DF特征）
+          → 只能采用 SCD Type I
+          
+        high_change_frequency: |
+          高频变更（如每日多次）
+          → SCD Type II需谨慎，可考虑Type I + 衍生表
+          
+        low_change_frequency: |
+          低频变更（如月度或季度）
+          → SCD Type II 最合适
+      
+      # 维度3: 表大小和存储成本
+      table_size:
+        small_under_1m: "<100万行 → Type II任意，无存储压力"
+        medium_1m_100m: "100万-1000万行 → Type II可行，需考虑分区"
+        large_over_100m: ">1000万行 → Type II需分区管理或考虑Type I"
+      
+      # 维度4: 分析访问模式
+      access_patterns:
+        historical_comparison: "需要年同比、历史趋势对比 → Type II"
+        snapshot_only: "只需最新快照 → Type I"
+        mixed: "既需最新也需部分历史 → Type III或Type II+Type I组合"
+      
+      # 决策优先级（从高到低）
+      decision_priority:
+        priority_1: "业务需求 - 是否需要历史追踪（最高优先级）"
+        priority_2: "数据质量 - 是否有可靠的时间戳（必要条件）"
+        priority_3: "表大小 - 存储成本是否可控（约束条件）"
+        priority_4: "访问模式 - 查询效率和分析需求（优化条件）"
+      
+      # 快速决策矩阵
+      quick_matrix: |
+        ┌────────────┬──────────────┬──────────────┬──────────────┐
+        │ 业务需求   │ 数据质量     │ 表大小       │ 推荐SCD类型  │
+        ├────────────┼──────────────┼──────────────┼──────────────┤
+        │ 需要历史   │ 有时间戳     │ <100万行     │ Type II      │
+        │ 需要历史   │ 有时间戳     │ >100万行     │ Type II+分区 │
+        │ 需要历史   │ 无时间戳     │ 任意         │ Type I(阿）  │  
+        │ 仅需前值   │ 有时间戳     │ <100万行     │ Type III     │
+        │ 不需历史   │ 任意         │ 任意         │ Type I       │
+        └────────────┴──────────────┴──────────────┴──────────────┘
+      
+      注: 备注阿 = 不推荐，应重新评估数据质量或业务需求
+    
+    # 4. 维度的完整性
+    completeness:
+      rule: "用slowly changing dimension(SCD)处理维度变化，而不是覆盖"
+      rationale: "保证历史数据的一致性"
+    
+    # 5. 维度分组
+    grouping:
+      rule: "将相关的属性分组在同一维度中"
+      examples:
+        customer_demographics: [age_group, gender, marital_status]
+        customer_profile: [customer_type, customer_level, vip_flag]
+        customer_geography: [city, state, country, region]
+    
+    # 6. 维度粒度
+    granularity:
+      principle: "维度粒度要与业务需求相匹配"
+      consideration: "过细的粒度导致维度表过大；过粗的粒度丧失分析能力"
+  
+  # ============ 维度表避免的设计反模式 ============
+  anti_patterns:
+    
+    - name: "过度规范化"
+      description: "维度表全是FK指向其他维度表，失去维度的反范式化优势"
+      solution: "在维度表中冗余存储相关属性，提高查询效率"
+    
+    - name: "缺少业务键"
+      description: "没有标准的business_key，无法与源系统对账"
+      solution: "必须包含源系统的唯一业务键"
+    
+    - name: "无SCD处理"
+      description: "维度属性变化时直接覆盖，导致历史分析不准"
+      solution: "根据业务需求选择合适的SCD策略"
+    
+    - name: "混合粒度"
+      description: "一个维度表中有多个粒度的数据（如客户+订单信息）"
+      solution: "维度的粒度必须统一"
+    
+    - name: "无主键约束"
+      description: "维度表允许重复记录"
+      solution: "维度表必须有唯一性约束（business_key唯一）"
+
+  # ============ DIM表FROM ODS转换规则 ============
+  from_ods_transformation:
+    
+    input_from_bus_matrix:
+      source: "莫西提供的总线矩阵CSV"
+      
+      mapping:
+        - business_plate: "总线矩阵中的'业务板块'列"
+        - consistency_dimensions: "总线矩阵中的'一致性维度列表'列"
+      
+      processing_rule: |
+        遍历总线矩阵的'一致性维度列表'列:
+        1. 按逗号分隔多个维度
+        2. 去重得到维度清单
+        3. 为每个维度生成DIM表
+        
+        示例：
+        业务板块: 经济业务
+        一致性维度: 客户账号, 产品, 时间
+        
+        输出维度清单:
+        - dim_securities_customer (来自 ods_*_customer_*/ods_*_account_*)
+        - dim_securities_product  (来自 ods_*_product_*)
+        - dim_common_date         (特殊处理，使用模板)
+      
+      special_cases:
+        date_dimension: "日期维度不加业务板块前缀，使用 dim_common_date"
+        time_dimension: "时间维度不加业务板块前缀，使用 dim_common_time"
+        reference_dimensions: "如果维度来自参考系统，优先使用共享维度"
+      
+      output: "维度清单（业务板块 + 维度名称 + 源ODS表）"
+    
+    steps:
+      0_identify_from_matrix:
+        rule: "从总线矩阵中提取需要构建的维度"
+        method: "解析CSV中的'一致性维度列表'列，去重"
+        naming_strategy: "dim_{business_plate}_{dimension_name}"
+        output: "维度清单（包含表名、来源板块、源ODS表映射）"
+        template: |
+          维度名称 | 业务板块 | 源ODS表模式 | 粒度
+          ---------|---------|------------|------
+          客户    | 经济业务 | ods_*_customer_* / ods_*_account_* | 客户账号
+          产品    | 经济业务 | ods_*_product_* | 产品代码
+          日期    | 公共    | 算法生成 | 日期
+      
+      1_select_entities:
+        rule: "根据维度清单（来自总线矩阵Step 0），确定ODS源表"
+        mapping_strategy: |
+          • 客户账号 → ods_*_customer_* / ods_*_account_* (按increment_type选择DI源)
+          • 产品 → ods_*_product_* (按increment_type选择DI源)
+          • 店铺 → ods_*_store_* / ods_*_shop_*
+          • 员工 → ods_*_employee_* / ods_*_staff_*
+          • 时间 → 特殊处理，使用dim_date模板，无需ODS源
+        
+        selection_criteria:
+          - is_reference_data: true        # 参考数据
+          - is_slowly_changing: true       # 缓慢变化
+          - has_business_key: true         # 有业务键
+          - increment_type: "DI优先(有时间戳)，DF次选(无时间戳)"
+        
+        exclude:
+          - transaction_tables: true       # 排除交易表
+          - log_tables: true               # 排除日志表（除非特意要求）
+      
+      2_select_columns:
+        rule: "从ODS表选择构成维度的字段"
+        include:
+          - business_key: true
+          - all_text_attributes: true
+          - all_categorical_fields: true
+          - important_dates: true
+        exclude:
+          - technical_fields: true         # 排除技术字段
+          - redundant_fields: true         # 排除冗余字段
+          - deprecated_fields: true        # 排除废弃字段
+      
+      3_add_pk:
+        rule: "添加代理键(SK)作为维度主键"
+        implementation: "使用ROW_NUMBER()在SQL中生成"
+        order_by: "按business_key和分区字段排序"
+      
+      4_scd_handling:
+        rule: "根据lifecycle_rules.yaml为维度添加SCD字段"
+        type_1: "无需额外处理，直接INSERT OVERWRITE"
+        type_2: "添加begin_date/end_date/is_active字段"
+      
+      5_deduplication:
+        rule: "去重和清洁"
+        actions:
+          - remove_duplicates: "基于business_key"
+          - standardize_formats: "日期/代码格式规范化"
+          - null_handling: "关键字段非NULL校验"
+
+# ============ DIM建表SQL模板 ==============
+sql_template_type_1: |
+  CREATE TABLE dim_{{ entity }} (
+    -- 维度键
+    {{ entity }}_sk BIGINT COMMENT '{{ entity }}代理键(维度主键)',
+    {{ entity }}_id STRING COMMENT '{{ entity }}业务键(来自ODS)',
+    
+    -- 维度属性
+    {% for attr in attributes %}
+    {{ attr.name }} {{ attr.type }} COMMENT '{{ attr.description }}',
+    {% endfor %}
+    
+    -- 审计字段
+    etl_insert_time TIMESTAMP COMMENT 'ETL插入时间',
+    etl_update_time TIMESTAMP COMMENT 'ETL更新时间'
+  )
+  PARTITIONED BY (pt STRING COMMENT '分区日期')
+  STORED AS ORC
+  TBLPROPERTIES ('orc.compress'='SNAPPY');
+
+sql_template_type_2: |
+  CREATE TABLE dim_{{ entity }}_scd2 (
+    -- 维度键
+    {{ entity }}_sk BIGINT COMMENT '{{ entity }}代理键(维度主键)',
+    {{ entity }}_id STRING COMMENT '{{ entity }}业务键(来自ODS)',
+    
+    -- 维度属性
+    {% for attr in attributes %}
+    {{ attr.name }} {{ attr.type }} COMMENT '{{ attr.description }}',
+    {% endfor %}
+    
+    -- SCD II 字段
+    begin_date STRING COMMENT '维度值生效日期(开始日期)',
+    end_date STRING COMMENT '维度值失效日期(结束日期,当前记录为9999-12-31)',
+    is_active INT COMMENT '是否当前活跃记录(1=当前,0=历史)',
+    
+    -- 审计字段
+    etl_insert_time TIMESTAMP COMMENT 'ETL插入时间',
+    etl_update_time TIMESTAMP COMMENT 'ETL更新时间'
+  )
+  PARTITIONED BY (pt STRING COMMENT '分区日期')
+  STORED AS ORC
+  TBLPROPERTIES ('orc.compress'='SNAPPY');

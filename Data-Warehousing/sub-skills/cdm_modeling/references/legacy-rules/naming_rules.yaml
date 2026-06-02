@@ -1,0 +1,132 @@
+# ========================================
+# CDM建模 - 命名规范
+# ========================================
+# 统一的表名、字段名命名规则，确保整个数据仓库的命名一致性
+
+layer_prefix:
+  ods: "ods_"
+  dws: "dws_"
+  dim: "dim_"
+  dwd: "dwd_"
+  cdm: "cdm_"
+  ads: "ads_"
+  temp: "tm_"
+
+column_suffix:
+  surrogate_key: "_sk"
+  business_key: "_id"
+  measure:
+    - "_amount"
+    - "_qty"
+    - "_count"
+    - "_price"
+    - "_cost"
+    - "_rate"
+
+# 表名格式：{layer}_{业务板块}_{数据域过程}_{增量类型}
+# 示例：dwd_经济业务_客户授信变更_di (数据仓库层-业务板块-业务过程-增量类型)
+#      dwd_产品_产品上架_di
+table_naming_format: "{layer}_{business_sector}_{business_process}_{increment_type}"
+
+# 增量类型后缀 (复用ODS规则判断)
+increment_types:
+  increment: "_di"      # 增量表 (Delta Increment) - 有create_time/update_time
+  full: "_df"           # 全量表 (Delta Full) - 无时间字段
+  
+  # DWD事实表增量类型判断规则：
+  # • 有create_time/update_time → di （大多数DWD表）
+  # • 无时间字段 → df （DWD通常都应该是di，除非是维度快照）
+
+# 特殊字段名规范
+special_fields:
+  # 事实表字段
+  fact_primary_key: "fact_id"
+  fact_date: "fact_date"
+  
+  # 维度表字段
+  dim_surrogate_key: "{dim_name}_sk"
+  dim_business_key: "{dim_name}_id"
+  
+  # SCD字段（维度表Type II）
+  scd_begin_date: "begin_date"
+  scd_end_date: "end_date"
+  scd_is_active: "is_active"
+  
+  # 时间字段
+  create_time: "create_time"
+  update_time: "update_time"
+  
+  # 分区字段
+  partition: "pt"
+  hour_partition: "hr"
+
+# SQL保留字检查
+reserved_keywords:
+  - SELECT
+  - CREATE
+  - TABLE
+  - WHERE
+  - GROUP
+  - ORDER
+  - HAVING
+  - UNION
+  - JOIN
+  - FROM
+  - INSERT
+  - UPDATE
+  - DELETE
+
+# 字段类型映射
+field_type_mapping:
+  bigint: "BIGINT"
+  int: "INT"
+  string: "STRING"
+  varchar: "STRING"
+  decimal: "DECIMAL(18,2)"
+  decimal_precise: "DECIMAL(20,4)"
+  timestamp: "TIMESTAMP"
+  datetime: "STRING"
+  date: "STRING"
+  double: "DOUBLE"
+  float: "FLOAT"
+  boolean: "INT"
+
+# 建表规范
+create_table_standards:
+  catalog: ""
+  database: "{layer}_{domain}"
+  storage_format: "ORC"
+  partitions:
+    - name: "pt"
+      type: "STRING"
+      comment: "数据分区日期 (YYYY-MM-DD)"
+  
+  # 表属性配置
+  table_properties:
+    - key: "orc.compress"
+      value: "SNAPPY"
+    - key: "orc.stripe.size"
+      value: "67108864"
+
+# 命名检查规则
+validation_rules:
+  table_name_length:
+    min: 5
+    max: 64
+  column_name_length:
+    min: 2
+    max: 64
+  
+  # 表名必须小写
+  table_name_lowercase: true
+  # 列名必须小写
+  column_name_lowercase: true
+  # 不允许空格
+  no_spaces: true
+  # 不允许特殊字符（除下划线）
+  special_chars_pattern: "^[a-z0-9_]+$"
+  
+  # 命名冲突检查
+  avoid_abbreviations: true
+  avoid_single_letter: true
+  meaningful_names: true

@@ -1,0 +1,481 @@
+# ========================================
+# CDM建模 - DWD事实表建模规则
+# ========================================
+# 事实表(Fact Table)的设计约束和最佳实践
+
+fact_modeling:
+  
+  # ============ 事实表的定义 ============
+  definition: |
+    事实表是Kimball维度建模中记录业务事件或交易的核心表。
+    特点：
+    • 包含度量值（可加总的数值）和维度外键
+    • 粒度明确（每一行代表一个业务事件）
+    • 通常较大，高频写入
+    • 支持快速的聚合分析
+  
+  # ============ DWD表命名 ============
+  naming:
+    prefix: "dwd_"
+    format: "dwd_{业务板块}_{数据域过程}_{增量类型}"
+    
+    components:
+      business_sector: "经济业务|产品|服务|营销"
+      business_process: "客户授信变更|产品上架|订单|发货|支付|退货"
+      increment_type: "di(增量)|df(全量,少见)"
+    
+    examples:
+      - dwd_经济业务_客户授信变更_di     # 经济业务板块：客户授信变更增量表
+      - dwd_产品_产品上架_di             # 产品板块：产品上架增量表
+      - dwd_销售_订单_di                # 销售板块：订单增量表
+      - dwd_库存_库存变动_di             # 库存板块：库存变动增量表
+    
+    # ============ 增量类型判断规则 ============
+    # 完整规则体系参考: lifecycle_rules.yaml > increment_type_detection
+    increment_type_rules:
+      reference_file: "lifecycle_rules.yaml > increment_type_detection"
+      
+      summary: |
+        根据ODS源表的特征，自动判断DWD事实表是增量表(di)还是全量表(df)。
+        规则包含："表名判断"、"表结构判断"、"优先级冲突解决"、"自动判断流程"等。
+      
+      quick_reference:
+        method_1_naming: |
+          检查ODS表名是否匹配DI/DF pattern:
+          DI(增量): log_*, record_*, order_*, payment_*, detail_*, event_*, etc.
+          DF(全量): code_*, config_*, dict_*, customer, product, etc.
+        
+        method_2_structure: |
+          检查ODS表字段特征:
+          DI特征(有时间追踪): create_time, update_time, gmt_create, auto_increment
+          DF特征(无时间追踪): 无时间字段、字段数≤5、简单键值结构
+        
+        method_3_priority: |
+          冲突解决优先级:
+          1. 表名判断 > 表结构判断
+          2. 时间戳字段 > 自增字段
+          3. create_time > update_time
+      
+      scd_recommendation: |
+        根据增量类型选择适合的SCD策略:
+        • DI(增量表): 支持SCD Type II(拉链)，记录完整变更历史
+        • DF(全量表): 采用简单覆盖更新，每天快照保留30天
+
+  # ============ 事实表的关键元素 ============
+  required_elements:
+    
+    # 1. 事实表键
+    fact_key:
+      description: "事实表标识符（通常是业务交易ID）"
+      naming: "{business_process}_id"
+      examples:
+        - order_id
+        - shipment_id
+        - payment_id
+        - return_id
+      requirements:
+        - not_null: true
+        - unique_per_granule: true       # 按粒度唯一
+        - source_from: "ODS"
+    
+    surrogate_key:
+      description: "系统生成的代理键（可选，用于性能）"
+      naming: "{business_process}_sk"
+      type: "BIGINT"
+      use_case: "large_tables"
+    
+    # 2. 维度外键（必需）
+    dimension_foreign_keys:
+      description: "指向维度表的代理键"
+      naming: "{dimension}_sk"
+      examples:
+        - customer_sk              # 指向 dim_customer
+        - product_sk               # 指向 dim_product
+        - shop_sk                  # 指向 dim_shop
+        - date_sk                  # 指向 dim_date
+      
+      requirements:
+        - not_null: true
+        - references_dimension: true
+        - use_surrogate_key: true
+      
+      design_rules:
+        - minimize_dimensions: "只包含关键分析维度"
+        - avoid_junk_dimensions: "不要创建太多低基数维度"
+        - date_dimension: "总是包含业务日期维度"
+    
+    # 3. 度量值（必需）
+    measures:
+      description: "可加总的数值，用于聚合分析"
+      types:
+        additive:
+          description: "可在所有维度上SUM聚合"
+          examples:
+            - amount               # 金额可跨时间、地点求和
+            - quantity             # 数量可跨维度求和
+            - count                # 计数可求和
+        
+        semi_additive:
+          description: "只能在某些维度上SUM聚合"
+          examples:
+            - balance              # 余额不能跨时间求和（应该取最后值）
+            - inventory_qty        # 库存数量不能跨时间求和（应该取期末）
+        
+        non_additive:
+          description: "不能对值求和，需要特殊处理"
+          examples:
+            - price                # 单价不能求和，应该取平均
+            - percentage           # 百分比不能求和，需要重算
+            - rate                 # 汇率不能求和，需要计算平均
+      
+      requirements:
+        - numeric_type: true
+        - business_meaningful: true
+        - clearly_defined: true
+      
+      naming_conventions:
+        amounts: "*_amount, *_price, *_cost, *_revenue"
+        quantities: "*_qty, *_quantity, *_volume"
+        counts: "*_count, *_num, *_cnt"
+    
+    # 4. 时间戳（必需）
+    transaction_timestamps:
+      description: "业务事件发生的时间"
+      importance: "critical"
+      fields:
+        event_timestamp: "业务事件发生时间"
+        order_date: "订单日期（聚合粒度）"
+        create_time: "系统创建时间"
+      
+      considerations:
+        - precision: "根据业务需求选择日/小时/分钟粒度"
+        - business_time_vs_system_time: "使用业务时间而非系统时间"
+        - timezone_awareness: "统一时区处理"
+  
+  # ============ 事实表的可选元素 ============
+  optional_elements:
+    
+    # 事实计数列
+    row_count:
+      description: "每行一条"
+      purpose: "用于COUNT(*)聚合，优化性能避免COUNT全表"
+      naming: "record_count"
+      default_value: 1
+    
+    # 业务键（可选，用于对账）
+    business_keys:
+      description: "源系统的业务键，用于与源系统对账"
+      usage: "数据质量检查、对账"
+      examples:
+        - order_id
+        - payment_id
+    
+    # 描述性属性（应该最小化）
+    denormalized_attributes:
+      description: "从维度反范式化的关键属性（仅必需时包含）"
+      concern: "引入数据冗余和不一致风险"
+      examples:
+        - customer_name             # 最好还是通过JOIN dim_customer获取
+        - product_name              # 最好还是通过JOIN dim_product获取
+      principle: "应该通过JOIN维度表获取，而不是冗余存储"
+    
+    # 标志位
+    flags:
+      description: "业务标志位"
+      examples:
+        - is_return: "是否退货"
+        - is_sale: "是否销售"
+        - is_valid: "是否有效"
+    
+    # 调试字段
+    debug_fields:
+      description: "ETL调试用字段"
+      examples:
+        - source_system: "来源系统"
+        - etl_batch_id: "ETL批次号"
+        - data_quality_flag: "数据质量标记"
+
+  # ============ 事实表的标准特征 ============
+  characteristics:
+    
+    grain_level: "粒度明确"
+    examples:
+      - "dwd_sales_order: 一行 = 一个订单"
+      - "dwd_sales_order_line: 一行 = 一条订单行"
+      - "dwd_sales_transaction: 一行 = 一笔交易"
+    
+    granularity_consideration: |
+      粒度选择原则：
+      • 原子粒度（最细）：满足最详细的分析需求
+      • 向上兼容性：细粒度能支持所有粗粒度分析
+      • 避免重复计算：双计价问题（double-counting）
+    
+    size: "通常很大（亿级+行）"
+    growth_rate: "高频增长（每日增加数百万行）"
+    update_behavior: "仅INSERT，极少UPDATE/DELETE"
+    sparsity: "通常很稀疏（许多维度组合无数据）"
+
+  # ============ 事实表的设计最佳实践 ============
+  best_practices:
+    
+    # 1. 粒度一致性
+    grain_consistency:
+      principle: "一个事实表中所有行的粒度必须相同"
+      wrong_example: "订单 + 订单行 + 支付 混在一个表中"
+      right_approach: "创建多个事实表，每个表专注一个粒度"
+    
+    # 2. 度量值的一致性
+    measure_consistency:
+      principle: "度量值必须与粒度对应"
+      example: "订单事实表中的quantity应该是订单总量，不是订单行"
+    
+    # 3. 维度的最小化
+    dimension_minimization:
+      principle: "只包含直接相关的分析维度"
+      wrong: "订单中包含所有可能的维度"
+      right: "订单中只包含与销售分析直接相关的维度"
+      concern: "过多维度导致表变宽，查询性能下降"
+    
+    # 4. 垃圾维度处理
+    junk_dimension:
+      definition: "将多个低基数的标志位/类型字段汇总到一个维度表"
+      purpose: "减少事实表的外键数量"
+      example: |
+        不推荐：is_return, is_exchange, is_warranty → 3个维度
+        推荐：创建 dim_transaction_type(1=正常, 2=退货, 3=换货, 4=保修)
+    
+    # 5. 缓慢变化维度处理
+    scd_handling:
+      principle: "事实表中使用维度快照"
+      approach: |
+        订单事件在T+1冻结：
+        • 使用订单时间点的维度快照
+        • 客户在订单时间的等级/地址
+        • 商品在订单时间的价格/分类
+        • 不会因为后续维度变化而回溯修改
+    
+    # 6. 日期维度
+    date_dimension:
+      principle: "总是包含一个日期维度外键"
+      fields:
+        - date_sk               # 指向dim_date的代理键
+        - transaction_date      # 可选：业务日期（冗余但方便）
+      rationale: "时间是最重要的分析维度"
+    
+    # 7. 避免冗余
+    denormalization_caution:
+      principle: "极小化冗余存储"
+      guideline: "通过JOIN维度表获取属性，而不是在事实表冗余"
+      exception: "非常高频查询的字段可以考虑冗余（e.g., 客户名字）"
+  
+  # ============ DWD字段规则 ============
+  field_rules:
+    principle: |
+      DWD事实表字段应该保持原始完整性，同时添加系统管理字段。
+    
+    business_fields:
+      description: "保留ODS层所有业务字段"
+      rule: "完整复制ODS表的业务字段逻辑"
+      rationale: "确保分析的完整性和追溯性"
+      examples:
+        - order_id: "订单业务键"
+        - order_amount: "订单金额"
+        - product_code: "商品编码"
+    
+    system_fields:
+      etl_time:
+        name: "etl_time"
+        type: "STRING"
+        comment: "ETL处理时间"
+        format: "YYYY-MM-DD HH:MM:SS"
+        description: "记录数据何时加载到DWD层"
+      
+      # 分区字段
+      partition:
+        name: "pt"
+        type: "STRING"
+        comment: "分区字段(yyyymmdd)"
+        format: "YYYYMMDD"
+        description: "用于分区表的日期字段，支持按日期查询优化"
+    
+    field_type_mapping:
+      rule: "复用ODS层的字段类型映射规则"
+      references: "type_mapping.yaml"
+      principle: "统一数据类型视图，避免类型转换"
+    
+    field_comments:
+      rule: "保留ODS表的原始注释"
+      practice: "每个字段都应该有清晰的业务说明"
+      format: "'{field_desc} (from ODS)' or '{field_desc}'"
+  
+  # ============ DWD生命周期规则 ============
+  lifecycle_rules:
+    principle: |
+      事实表根据增量类型，设置不同的数据保留生命周期。
+    
+    di_increment_table:
+      type: "_di (增量表)"
+      condition: "有create_time/update_time字段"
+      lifecycle: "9999 days（永久保留）"
+      rationale: |
+        增量事实表记录历史交易，需要追溯分析。
+        保留全量历史数据，支持：
+        • 年度对比分析
+        • 历史趋势分析
+        • 财务审计需求
+      examples:
+        - dwd_经济业务_客户授信变更_di: "永久保留客户授信变化历史"
+        - dwd_销售_订单_di: "永久保留订单历史记录"
+    
+    df_full_table:
+      type: "_df (全量表，少见)"
+      condition: "无时间字段（快照型）"
+      lifecycle: "30 days（保留30天）"
+      rationale: |
+        全量快照表记录当前状态，历史快照可删除。
+        保留最近30天快照用于：
+        • 数据对账
+        • 质量检查
+        • 少量历史查询
+      note: "DWD通常不采用df，除非是维度快照"
+  
+  # ============ DWD表避免的设计反模式 ============
+  anti_patterns:
+    
+    - name: "混合粒度"
+      description: "一个表中有订单+订单行+支付等多个不同粒度的行"
+      problem: "度量值产生双计价（double-counting），聚合结果错误"
+      solution: "按粒度创建多个事实表"
+    
+    - name: "冗余维度属性"
+      description: "事实表中存储大量维度属性（如客户名字、商品描述）"
+      problem: "数据冗余，维度变化难以同步，查询性能差"
+      solution: "通过JOIN维度表动态获取属性"
+    
+    - name: "包含所有维度"
+      description: "事实表外键指向50+个维度"
+      problem: "星形模式退化，维护困难，查询效率低"
+      solution: "只包含直接分析维度，其他通过间接JOIN获取"
+    
+    - name: "度量值逻辑错误"
+      description: "在错误的粒度级别聚合（例如在行级求和了应该是订单级的字段）"
+      problem: "分析结果完全错误"
+      solution: "明确定义度量的定义和聚合规则"
+    
+    - name: "缺少时间维度"
+      description: "事实表缺少日期外键"
+      problem: "无法按时间维度分析"
+      solution: "总是添加date_sk指向dim_date"
+
+  # ============ DWD表FROM ODS转换规则 ============
+  from_ods_transformation:
+    
+    steps:
+      1_identify_fact_tables:
+        rule: "识别哪些ODS表应该成为事实表"
+        criteria:
+          - is_transactional: true        # 交易数据
+          - contains_measures: true       # 有度量值
+          - high_volume: true             # 高频率数据
+          - has_time_dimension: true      # 有时间维度
+        exclude:
+          - reference_tables: true        # 排除参考数据
+          - master_data: true             # 排除主数据
+      
+      2_determine_grain:
+        rule: "明确事实表的粒度（最重要的决策）"
+        process:
+          - identify_unique_event: "每行代表什么业务事件？"
+          - choose_finest_granule: "选择最细粒度以支持所有分析"
+          - validate_consistency: "确保所有行的粒度相同"
+        examples:
+          - order_level: "一行=一个订单（不分订单行）"
+          - order_line_level: "一行=一条订单行（分订单行）"
+          - transaction_level: "一行=一笔交易（最细）"
+      
+      3_select_measures:
+        rule: "选择所有业务度量值"
+        action: "从ODS中选择所有数值字段（且符合类型规则）"
+        validation:
+          - is_additive: "验证度量值的可加性"
+          - business_meaningful: "确保业务含义清晰"
+          - no_derived_values: "不要包含衍生的计算字段（由CDM计算）"
+      
+      4_identify_dimensions:
+        rule: "识别并添加维度外键"
+        process:
+          - find_foreign_keys: "从ODS中发现所有FK"
+          - convert_to_sk: "将ODS的business_key转换为DIM的surrogate_key"
+          - add_missing: "补充分析所需但ODS未直接包含的维度（如date_sk）"
+        mapping:
+          ods_customer_id → dim_customer_sk
+          ods_product_id → dim_product_sk
+          ods_shop_id → dim_shop_sk
+          ods_order_date → dim_date_sk
+      
+      5_denormalization_decision:
+        rule: "决定是否冗余存储某些维度属性"
+        criteria:
+          - query_performance: "如果大多数查询都需要该属性"
+          - data_stability: "维度属性很少变化"
+          - space_tradeoff: "存储增长可接受"
+        common_candidates:
+          - customer_name: "常见在报表中"
+          - product_name: "常见在报表中"
+        principle: "尽量避免，除非性能测试证明必要"
+      
+      6_time_handling:
+        rule: "添加时间维度相关的字段"
+        additions:
+          - date_sk: "关键：指向dim_date(业务日期)"
+          - hour_sk: "可选：小时维度（用于高频分析）"
+          - transaction_date: "可选：冗余存储业务日期方便过滤"
+
+  # ============ DWD建表SQL模板 ============
+  sql_template: |
+    CREATE TABLE dwd_{{ domain }}_{{ business_process }}_di (
+      -- 事实键
+      {{ business_process }}_id BIGINT COMMENT '{{ business_process }}ID(业务键)',
+      
+      -- 维度外键
+      customer_sk BIGINT COMMENT '客户代理键',
+      product_sk BIGINT COMMENT '商品代理键',
+      shop_sk BIGINT COMMENT '店铺代理键',
+      date_sk BIGINT COMMENT '业务日期代理键(dim_date)',
+      
+      -- 度量值
+      {% for measure in measures %}
+      {{ measure.name }} {{ measure.type }} COMMENT '{{ measure.description }}',
+      {% endfor %}
+      
+      -- 业务标志
+      is_valid INT COMMENT '是否有效记录(1=有效, 0=无效)',
+      
+      -- 审计字段
+      etl_insert_time TIMESTAMP COMMENT 'ETL插入时间',
+      etl_update_time TIMESTAMP COMMENT 'ETL更新时间',
+      source_system STRING COMMENT '来源系统'
+    )
+    PARTITIONED BY (pt STRING COMMENT '分区日期')
+    STORED AS ORC
+    TBLPROPERTIES ('orc.compress'='SNAPPY');
+
+  # ============ 星形模式示例 ============
+  star_schema_example: |
+    查询示例：按地区、客户等级、商品品类、订单日期统计销售额
+    
+    SELECT
+      dr.region,
+      dc.customer_level,
+      dp.category,
+      dd.year_month,
+      SUM(dwd.amount) as total_sales,
+      COUNT(DISTINCT dwd.customer_sk) as unique_customers
+    FROM dwd_sales_order dwd
+    INNER JOIN dim_date dd ON dwd.date_sk = dd.date_sk
+    INNER JOIN dim_customer dc ON dwd.customer_sk = dc.customer_sk
+    INNER JOIN dim_product dp ON dwd.product_sk = dp.product_sk
+    INNER JOIN dim_region dr ON dc.region_sk = dr.region_sk
+    WHERE dd.year_month >= '202501'
+    GROUP BY dr.region, dc.customer_level, dp.category, dd.year_month
+    ORDER BY total_sales DESC
